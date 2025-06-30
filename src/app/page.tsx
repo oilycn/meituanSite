@@ -273,44 +273,62 @@ export default function Home() {
     setStations([]);
     setSelectedStationIndex(null);
     setUserCoordinates(null);
+    form.setValue("address", "正在定位...");
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
         const coords = { latitude, longitude };
+        
+        try {
+            // Run station search and reverse geocoding in parallel
+            const [stationResult, geocodeResult] = await Promise.all([
+                getNearestStations(coords),
+                new Promise<{ address: string | null; error?: string }>((resolve) => {
+                    geocoder.getAddress([longitude, latitude], (status: string, result: any) => {
+                        if (status === 'complete' && result.regeocode) {
+                            resolve({ address: result.regeocode.formattedAddress });
+                        } else {
+                            resolve({ address: null, error: '无法获取当前位置的地址信息。' });
+                        }
+                    });
+                })
+            ]);
 
-        setUserCoordinates(coords);
+            // Handle geocoding result first
+            if (geocodeResult.error || !geocodeResult.address) {
+                toast({ variant: 'destructive', title: '地址解析失败', description: geocodeResult.error || '未知错误' });
+                form.setValue('address', '定位失败');
+                setUserAddress('您的位置');
+            } else {
+                const address = geocodeResult.address;
+                form.setValue('address', address);
+                setUserAddress(address);
 
-        const stationResult = await getNearestStations(coords);
-        if (stationResult.error) {
-          toast({ variant: 'destructive', title: '错误', description: stationResult.error });
-        } else if (stationResult.data) {
-          setStations(stationResult.data.stations);
-        }
-
-        const lnglat = [longitude, latitude];
-        geocoder.getAddress(lnglat, (status: string, result: any) => {
-          if (status === 'complete' && result.regeocode) {
-            const address = result.regeocode.formattedAddress;
-            form.setValue('address', address);
-            setUserAddress(address);
-
-            const newHistory = [
-              address,
-              ...addressHistory.filter((item) => item !== address),
-            ].slice(0, 5);
-            setAddressHistory(newHistory);
-            try {
-              localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
-            } catch (e) {
-              console.error('Failed to save address history to localStorage', e);
+                const newHistory = [
+                  address,
+                  ...addressHistory.filter((item) => item !== address),
+                ].slice(0, 5);
+                setAddressHistory(newHistory);
+                localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
             }
-          } else {
-            toast({ variant: 'destructive', title: '错误', description: '无法获取当前位置的地址信息。' });
-            setUserAddress('您的位置');
-          }
-          setIsLocating(false);
-        });
+
+            // Handle station search result
+            if (stationResult.error) {
+                toast({ variant: 'destructive', title: '站点搜索失败', description: stationResult.error });
+                setUserCoordinates(coords);
+            } else if (stationResult.data) {
+                setStations(stationResult.data.stations);
+                setUserCoordinates(coords);
+            }
+
+        } catch (error) {
+            console.error("An unexpected error occurred during location processing:", error);
+            toast({ variant: 'destructive', title: '错误', description: '处理定位时发生未知错误。' });
+            form.setValue('address', '');
+        } finally {
+            setIsLocating(false);
+        }
       },
       (error) => {
         let message = '无法获取您的位置。';
@@ -318,6 +336,7 @@ export default function Home() {
           message = '您已拒绝位置权限，请在浏览器设置中开启。';
         }
         toast({ variant: 'destructive', title: '定位失败', description: message });
+        form.setValue('address', '');
         setIsLocating(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }

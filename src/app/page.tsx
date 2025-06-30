@@ -53,9 +53,9 @@ export default function Home() {
   const [userCoordinates, setUserCoordinates] = useState<{latitude: number, longitude: number} | null>(null);
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [isSuggesting, setIsSuggesting] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [autoComplete, setAutoComplete] = useState<any>(null);
+  const [geocoder, setGeocoder] = useState<any>(null);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -68,23 +68,54 @@ export default function Home() {
   const addressValue = form.watch("address");
 
   useEffect(() => {
-    const loadDefaultStations = async () => {
+    const loadInitialData = async (address: string) => {
       setIsLoading(true);
-      const defaultAddress = "上海市黄浦区人民广场";
-      setUserAddress(defaultAddress);
+      setUserAddress(address);
+      form.setValue("address", address);
 
-      const result = await getNearestStations(defaultAddress);
+      // We need to geocode the default address as well
+      const geocodePromise = new Promise<{latitude: number, longitude: number} | null>((resolve) => {
+        const AMap = window.AMap;
+        if (!geocoder) {
+            // Geocoder might not be in state yet, but it's initialized.
+            const tempGeocoder = new AMap.Geocoder({ city: '全国' });
+            tempGeocoder.getLocation(address, (status: string, result: any) => {
+              if (status === 'complete' && result.geocodes.length) {
+                const { lat, lng } = result.geocodes[0].location;
+                resolve({ latitude: lat, longitude: lng });
+              } else {
+                resolve(null);
+              }
+            });
+            return;
+        };
 
-      if (result.error) {
-        toast({ variant: "destructive", title: "错误", description: result.error });
-      } else if (result.data) {
-        setStations(result.data.stations);
-        setUserCoordinates(result.data.userCoordinates);
+        geocoder.getLocation(address, (status: string, result: any) => {
+          if (status === 'complete' && result.geocodes.length) {
+            const { lat, lng } = result.geocodes[0].location;
+            resolve({ latitude: lat, longitude: lng });
+          } else {
+            resolve(null);
+          }
+        });
+      });
+      
+      const coords = await geocodePromise;
+
+      if (coords) {
+        setUserCoordinates(coords);
+        const result = await getNearestStations(coords);
+        if (result.error) {
+          toast({ variant: "destructive", title: "错误", description: result.error });
+        } else if (result.data) {
+          setStations(result.data.stations);
+        }
+      } else {
+        toast({ variant: "destructive", title: "错误", description: "无法解析默认地址的坐标。" });
       }
+
       setIsLoading(false);
     };
-
-    loadDefaultStations();
 
     import('@amap/amap-jsapi-loader').then(({ default: AMapLoader }) => {
         if (process.env.NEXT_PUBLIC_AMAP_KEY && process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
@@ -96,10 +127,12 @@ export default function Home() {
         AMapLoader.load({
           key: process.env.NEXT_PUBLIC_AMAP_KEY || "",
           version: "2.0",
-          plugins: ['AMap.AutoComplete'],
+          plugins: ['AMap.AutoComplete', 'AMap.Geocoder'],
         })
           .then((AMap) => {
             setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
+            setGeocoder(new AMap.Geocoder({ city: '全国' }));
+            loadInitialData("上海市黄浦区人民广场");
           })
           .catch((e) => {
             console.error("Failed to load AMap AutoComplete:", e);
@@ -108,6 +141,7 @@ export default function Home() {
                 title: "错误",
                 description: "地址建议服务加载失败。",
             });
+             setIsLoading(false);
           });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,20 +149,15 @@ export default function Home() {
 
   // Debounced effect for address suggestions
   useEffect(() => {
-    // If address is too short, clear suggestions and do nothing
-    if (!addressValue || addressValue.length < 2) {
+    if (!addressValue || addressValue.length < 2 || isLoading) {
       setSuggestions([]);
       setIsPopoverOpen(false);
       return;
     }
 
     const handler = setTimeout(() => {
-      // Don't search if autoComplete is not ready
       if (!autoComplete) return;
-
-      setIsSuggesting(true); // Start spinner right before the search
       autoComplete.search(addressValue, (status: string, result: any) => {
-        setIsSuggesting(false); // Stop spinner when search is done
         if (status === 'complete' && result.tips && result.tips.length > 0) {
           const newSuggestions = result.tips.map((tip: any) => tip.name);
           setSuggestions(newSuggestions);
@@ -143,10 +172,15 @@ export default function Home() {
     return () => {
       clearTimeout(handler);
     };
-  }, [addressValue, autoComplete]);
+  }, [addressValue, autoComplete, isLoading]);
 
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!geocoder) {
+      toast({ variant: "destructive", title: "错误", description: "地理编码服务尚未准备好，请稍候重试。" });
+      return;
+    }
+
     setIsPopoverOpen(false);
     setIsLoading(true);
     setStations([]);
@@ -154,21 +188,38 @@ export default function Home() {
     setSelectedStationIndex(null);
     setUserCoordinates(null);
 
-    const result = await getNearestStations(values.address);
+    const geocodePromise = new Promise<{latitude: number, longitude: number} | null>((resolve, reject) => {
+      geocoder.getLocation(values.address, (status: string, result: any) => {
+        if (status === 'complete' && result.geocodes.length > 0) {
+          const { lat, lng } = result.geocodes[0].location;
+          resolve({ latitude: lat, longitude: lng });
+        } else {
+          reject(new Error("无法找到该地址的坐标。"));
+        }
+      });
+    });
 
-    setIsLoading(false);
-
-    if (result.error) {
-      toast({ variant: "destructive", title: "错误", description: result.error });
-    } else if (result.data) {
-      setStations(result.data.stations);
-      setUserCoordinates(result.data.userCoordinates);
-      if (result.data.stations.length === 0) {
-        toast({
-            title: "未找到站点",
-            description: "我们未能找到该地址附近的任何站点。",
-        });
+    try {
+      const coords = await geocodePromise;
+      if(coords) {
+        setUserCoordinates(coords);
+        const result = await getNearestStations(coords);
+        if (result.error) {
+          toast({ variant: "destructive", title: "错误", description: result.error });
+        } else if (result.data) {
+          setStations(result.data.stations);
+          if (result.data.stations.length === 0) {
+            toast({
+                title: "未找到站点",
+                description: "我们未能找到该地址附近的任何站点。",
+            });
+          }
+        }
       }
+    } catch(err: any) {
+       toast({ variant: "destructive", title: "地址解析失败", description: err.message });
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -176,7 +227,6 @@ export default function Home() {
     form.setValue("address", suggestion, { shouldValidate: true });
     setSuggestions([]);
     setIsPopoverOpen(false);
-    form.handleSubmit(onSubmit)();
   };
 
 
@@ -224,7 +274,6 @@ export default function Home() {
                                       {...field}
                                       autoComplete="off"
                                       className="pl-10" />
-                                    {isSuggesting && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin" />}
                                   </div>
                                 </FormControl>
                               </PopoverAnchor>
@@ -250,7 +299,7 @@ export default function Home() {
                       )}
                     />
                     <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading && !isSuggesting ? (
+                      {isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           正在搜索...

@@ -7,7 +7,7 @@ import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations
 import { MapPin, AlertTriangle } from 'lucide-react';
 
 interface MapComponentProps {
-  stations: FindNearestStationsOutput;
+  stations: FindNearestStationsOutput['stations'];
   userCoordinates: { latitude: number; longitude: number } | null;
   selectedStationIndex: number | null;
   onStationSelect: (index: number | null) => void;

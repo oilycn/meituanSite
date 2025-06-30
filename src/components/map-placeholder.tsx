@@ -186,26 +186,30 @@ export function MapComponent({
             if (status === 'complete' && result.routes && result.routes.length) {
                 const route = result.routes[0];
                 
-                const path = route.path.map((p: any) => [p.lng, p.lat]);
-                const polyline = new window.AMap.Polyline({
-                    path: path,
-                    borderWeight: 2,
-                    strokeColor: 'hsl(var(--primary))',
-                    strokeOpacity: 0.9,
-                    strokeWeight: 6,
-                    strokeStyle: 'solid',
-                });
-                routePolyline.current = polyline;
-                map.current.add(polyline);
-                
-                map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, [80, 80, 80, 80], 16);
+                if (route && route.path) {
+                    const path = route.path.map((p: any) => [p.lng, p.lat]);
+                    const polyline = new window.AMap.Polyline({
+                        path: path,
+                        borderWeight: 2,
+                        strokeColor: 'hsl(var(--primary))',
+                        strokeOpacity: 0.9,
+                        strokeWeight: 6,
+                        strokeStyle: 'solid',
+                    });
+                    routePolyline.current = polyline;
+                    map.current.add(polyline);
+                    
+                    map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, [80, 80, 80, 80], 16);
 
-                const distanceInKm = (route.distance / 1000).toFixed(2);
-                const timeInMinutes = Math.round(route.time / 60);
-                onRoutePlanned({
-                    distance: `${distanceInKm} 公里`,
-                    time: `${timeInMinutes} 分钟`,
-                });
+                    const distanceInKm = (route.distance / 1000).toFixed(2);
+                    const timeInMinutes = Math.round(route.time / 60);
+                    onRoutePlanned({
+                        distance: `${distanceInKm} 公里`,
+                        time: `${timeInMinutes} 分钟`,
+                    });
+                } else {
+                    console.error('获取驾车路线路径失败', result);
+                }
             } else {
                 console.error('获取驾车数据显示失败', result);
             }

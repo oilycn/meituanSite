@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,16 +12,17 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getNearestStations } from "@/app/actions";
+import { getNearestStations, getAddressSuggestions } from "@/app/actions";
 import { MapPlaceholder } from "@/components/map-placeholder";
 import { StationInfoCard } from "@/components/station-info-card";
 import { MeituanIcon } from "@/components/icons";
+import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
 
 
 const formSchema = z.object({
   address: z.string().min(5, {
-    message: "Please enter a more specific address.",
+    message: "请输入更详细的地址。",
   }),
 });
 
@@ -32,6 +33,12 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedStationIndex, setSelectedStationIndex] = useState<number | null>(null);
 
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -39,7 +46,16 @@ export default function Home() {
     },
   });
 
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsPopoverOpen(false);
     setIsLoading(true);
     setStations([]);
     setUserAddress(values.address);
@@ -50,20 +66,52 @@ export default function Home() {
     if (result.error) {
       toast({
         variant: "destructive",
-        title: "Error",
+        title: "错误",
         description: result.error,
       });
     } else if (result.data) {
       setStations(result.data);
       if (result.data.length === 0) {
         toast({
-            title: "No stations found",
-            description: "We couldn't find any stations near that address.",
+            title: "未找到站点",
+            description: "我们未能找到该地址附近的任何站点。",
         });
       }
     }
     setIsLoading(false);
   }
+
+  const handleAddressChange = (value: string) => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    if (value.length < 3) {
+      setSuggestions([]);
+      setIsPopoverOpen(false);
+      return;
+    }
+
+    setIsSuggesting(true);
+    debounceTimeoutRef.current = setTimeout(async () => {
+      const result = await getAddressSuggestions(value);
+      setIsSuggesting(false);
+      if (result.data && result.data.suggestions.length > 0) {
+        setSuggestions(result.data.suggestions);
+        setIsPopoverOpen(true);
+      } else {
+        setSuggestions([]);
+        setIsPopoverOpen(false);
+      }
+    }, 500);
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    form.setValue("address", suggestion, { shouldValidate: true });
+    setSuggestions([]);
+    setIsPopoverOpen(false);
+  };
+
 
   const handleStationSelect = (index: number | null) => {
     setSelectedStationIndex(index);
@@ -76,7 +124,7 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <MeituanIcon className="w-8 h-8 text-primary" />
             <h1 className="text-xl font-bold tracking-tight">
-              Meituan Nearby Locator
+              美团附近站点查询
             </h1>
           </div>
         </div>
@@ -87,8 +135,8 @@ export default function Home() {
           <div className="lg:col-span-1 flex flex-col gap-8">
             <Card className="w-full shadow-lg">
               <CardHeader>
-                <CardTitle>Find Nearby Stations</CardTitle>
-                <CardDescription>Enter an address to find the three nearest Meituan stations.</CardDescription>
+                <CardTitle>查找附近站点</CardTitle>
+                <CardDescription>输入您的地址，查找最近的三个美团站点。</CardDescription>
               </CardHeader>
               <CardContent>
                 <Form {...form}>
@@ -98,13 +146,42 @@ export default function Home() {
                       name="address"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Your Address</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                              <Input placeholder="e.g., 123 Main St, Anytown, USA" {...field} className="pl-10" />
-                            </div>
-                          </FormControl>
+                          <FormLabel>您的地址</FormLabel>
+                            <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                              <PopoverAnchor asChild>
+                                <FormControl>
+                                  <div className="relative">
+                                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                                    <Input
+                                      placeholder="例如：北京市海淀区中关村"
+                                      {...field}
+                                      onChange={(e) => {
+                                        field.onChange(e);
+                                        handleAddressChange(e.target.value);
+                                      }}
+                                      autoComplete="off"
+                                      className="pl-10" />
+                                    {isSuggesting && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin" />}
+                                  </div>
+                                </FormControl>
+                              </PopoverAnchor>
+                              <PopoverContent align="start" className="w-[var(--radix-popover-anchor-width)] p-0">
+                                {suggestions.length > 0 && (
+                                  <ul className="py-1">
+                                    {suggestions.map((suggestion, index) => (
+                                      <li
+                                        key={index}
+                                        className="px-3 py-2 text-sm cursor-pointer hover:bg-accent rounded-md"
+                                        onClick={() => handleSuggestionClick(suggestion)}
+                                        onMouseDown={(e) => e.preventDefault()}
+                                      >
+                                        {suggestion}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </PopoverContent>
+                            </Popover>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -113,12 +190,12 @@ export default function Home() {
                       {isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Searching...
+                          正在搜索...
                         </>
                       ) : (
                         <>
                           <Search className="mr-2 h-4 w-4" />
-                          Search
+                          搜索
                         </>
                       )}
                     </Button>
@@ -128,7 +205,7 @@ export default function Home() {
             </Card>
 
             <div className="space-y-4">
-                <h2 className="text-lg font-semibold tracking-tight">Results</h2>
+                <h2 className="text-lg font-semibold tracking-tight">搜索结果</h2>
                 {isLoading && (
                     <div className="space-y-4">
                         {[...Array(3)].map((_, i) => (
@@ -169,7 +246,7 @@ export default function Home() {
                                 <Store className="w-8 h-8 text-muted-foreground" />
                             </div>
                             <p className="text-muted-foreground">
-                                {userAddress ? "No stations found." : "Your results will appear here."}
+                                {userAddress ? "未找到站点。" : "您的搜索结果将显示在此处。"}
                             </p>
                         </CardContent>
                     </Card>

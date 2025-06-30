@@ -48,7 +48,7 @@ export function MapPlaceholder({
                 style={{ fill: "hsl(var(--destructive) / 0.4)"}}
               />
               <span className="mt-2 px-3 py-1 text-sm font-bold text-white bg-destructive rounded-full shadow-lg">
-                You
+                您
               </span>
             </div>
           </div>
@@ -60,7 +60,7 @@ export function MapPlaceholder({
             className="absolute transition-all duration-300"
             style={{ ...markerPositions[index], transform: "translate(-50%, -50%)" }}
             onClick={() => onStationSelect(index === selectedStationIndex ? null : index)}
-            aria-label={`Select station: ${station.name}`}
+            aria-label={`选择站点：${station.name}`}
           >
             <div
               className={cn(
@@ -91,7 +91,7 @@ export function MapPlaceholder({
         <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center text-muted-foreground">
                 <MapPin className="mx-auto h-12 w-12" />
-                <p className="mt-4 font-medium">Map will be displayed here</p>
+                <p className="mt-4 font-medium">地图将在此处显示</p>
             </div>
         </div>
       )}

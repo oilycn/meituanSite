@@ -33,13 +33,13 @@ const findNearestStationsPrompt = ai.definePrompt({
   name: 'findNearestStationsPrompt',
   input: {schema: FindNearestStationsInputSchema},
   output: {schema: FindNearestStationsOutputSchema},
-  prompt: `You are an expert in geospatial analysis and finding nearby locations.
+  prompt: `你是一位专业的地理空间分析专家，擅长寻找附近的地点。
 
-  Given the following address, find the three nearest Meituan stations. Provide the name, address, and phone number for each station.
+  根据以下地址，找到最近的三个美团站点。请提供每个站点的名称、地址和电话号码。
 
-  Address: {{{address}}}
+  地址: {{{address}}}
 
-  Return the three nearest Meituan stations in a JSON array.
+  请以 JSON 数组的格式返回三个最近的美团站点。
   `,
 });
 

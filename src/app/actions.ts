@@ -1,12 +1,13 @@
 'use server';
 
 import { findNearestStations, FindNearestStationsOutput } from '@/ai/flows/find-nearest-stations';
+import { suggestAddresses, SuggestAddressesOutput } from '@/ai/flows/suggest-addresses';
 
 export async function getNearestStations(
   address: string
 ): Promise<{ data?: FindNearestStationsOutput; error?: string }> {
   if (!address || address.trim() === '') {
-    return { error: 'Address cannot be empty.' };
+    return { error: '地址不能为空。' };
   }
   try {
     const data = await findNearestStations({ address });
@@ -14,6 +15,22 @@ export async function getNearestStations(
   } catch (e) {
     console.error(e);
     // Return a user-friendly error message
-    return { error: 'Could not find stations for this address. Please try a different one or check your connection.' };
+    return { error: '无法为该地址找到站点。请尝试使用其他地址或检查您的连接。' };
+  }
+}
+
+export async function getAddressSuggestions(
+  partialAddress: string
+): Promise<{ data?: SuggestAddressesOutput; error?: string }> {
+  if (!partialAddress || partialAddress.trim().length < 2) {
+    return { data: { suggestions: [] } };
+  }
+  try {
+    const data = await suggestAddresses({ partialAddress });
+    return { data };
+  } catch (e) {
+    console.error(e);
+    // Don't bother the user with an error, just return no suggestions.
+    return { data: { suggestions: [] } };
   }
 }

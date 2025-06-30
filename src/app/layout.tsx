@@ -10,8 +10,8 @@ const fontSans = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Meituan Nearby Locator',
-  description: 'Find the nearest Meituan stations from any address.',
+  title: '美团附近站点查询',
+  description: '输入地址，查找最近的美团站点。',
 };
 
 export default function RootLayout({
@@ -20,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

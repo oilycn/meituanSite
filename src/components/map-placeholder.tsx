@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
-import AMapLoader from '@amap/amap-jsapi-loader';
 import { Skeleton } from './ui/skeleton';
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
 import { MapPin, AlertTriangle } from 'lucide-react';
@@ -46,18 +45,20 @@ export function MapComponent({
         };
     }
 
-    AMapLoader.load({
-      key: process.env.NEXT_PUBLIC_AMAP_KEY || "", // Amap Key
-      version: "2.0",
-      plugins: ['AMap.Marker', 'AMap.Icon', 'AMap.Pixel'],
-    })
-      .then((AMap) => {
-        setIsApiLoaded(true);
-      })
-      .catch((e) => {
-        console.error("Failed to load AMap:", e);
-        setLoadError("地图加载失败。请检查您的网络连接、API密钥是否正确，或稍后重试。");
-      });
+    import('@amap/amap-jsapi-loader').then(({ default: AMapLoader }) => {
+        AMapLoader.load({
+        key: process.env.NEXT_PUBLIC_AMAP_KEY || "", // Amap Key
+        version: "2.0",
+        plugins: ['AMap.Marker', 'AMap.Icon', 'AMap.Pixel'],
+        })
+        .then((AMap) => {
+            setIsApiLoaded(true);
+        })
+        .catch((e) => {
+            console.error("Failed to load AMap:", e);
+            setLoadError("地图加载失败。请检查您的网络连接、API密钥是否正确，或稍后重试。");
+        });
+    });
   }, []);
 
   useEffect(() => {

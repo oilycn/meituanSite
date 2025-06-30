@@ -12,8 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getNearestStations, getAddressSuggestions } from "@/app/actions";
-import { MapPlaceholder } from "@/components/map-placeholder";
+import { getNearestStations, getAddressSuggestions, getCoordinatesForAddress } from "@/app/actions";
+import { MapComponent } from "@/components/map-placeholder";
 import { StationInfoCard } from "@/components/station-info-card";
 import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
@@ -30,8 +30,9 @@ export default function Home() {
   const { toast } = useToast();
   const [stations, setStations] = useState<FindNearestStationsOutput>([]);
   const [userAddress, setUserAddress] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedStationIndex, setSelectedStationIndex] = useState<number | null>(null);
+  const [userCoordinates, setUserCoordinates] = useState<{latitude: number, longitude: number} | null>(null);
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -47,11 +48,38 @@ export default function Home() {
   });
 
   useEffect(() => {
+    const loadDefaultStations = async () => {
+      setIsLoading(true);
+      const defaultAddress = "上海市黄浦区人民广场";
+      setUserAddress(defaultAddress);
+
+      const [stationsResult, coordsResult] = await Promise.all([
+        getNearestStations(defaultAddress),
+        getCoordinatesForAddress(defaultAddress)
+      ]);
+
+      if (stationsResult.error) {
+        toast({ variant: "destructive", title: "错误", description: stationsResult.error });
+      } else if (stationsResult.data) {
+        setStations(stationsResult.data);
+      }
+      
+      if (coordsResult.error) {
+         toast({ variant: "destructive", title: "错误", description: coordsResult.error });
+      } else if (coordsResult.data) {
+        setUserCoordinates(coordsResult.data);
+      }
+      setIsLoading(false);
+    };
+
+    loadDefaultStations();
+    
     return () => {
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -60,28 +88,36 @@ export default function Home() {
     setStations([]);
     setUserAddress(values.address);
     setSelectedStationIndex(null);
+    setUserCoordinates(null);
 
-    const result = await getNearestStations(values.address);
+    const [stationsResult, coordsResult] = await Promise.all([
+        getNearestStations(values.address),
+        getCoordinatesForAddress(values.address)
+    ]);
 
-    if (result.error) {
-      toast({
-        variant: "destructive",
-        title: "错误",
-        description: result.error,
-      });
-    } else if (result.data) {
-      setStations(result.data);
-      if (result.data.length === 0) {
+    setIsLoading(false);
+
+    if (stationsResult.error) {
+      toast({ variant: "destructive", title: "错误", description: stationsResult.error });
+    } else if (stationsResult.data) {
+      setStations(stationsResult.data);
+      if (stationsResult.data.length === 0) {
         toast({
             title: "未找到站点",
             description: "我们未能找到该地址附近的任何站点。",
         });
       }
     }
-    setIsLoading(false);
+
+    if (coordsResult.error) {
+       toast({ variant: "destructive", title: "错误", description: coordsResult.error });
+    } else if (coordsResult.data) {
+      setUserCoordinates(coordsResult.data);
+    }
   }
 
   const handleAddressChange = (value: string) => {
+    form.setValue("address", value);
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
     }
@@ -156,7 +192,6 @@ export default function Home() {
                                       placeholder="例如：北京市海淀区中关村"
                                       {...field}
                                       onChange={(e) => {
-                                        field.onChange(e);
                                         handleAddressChange(e.target.value);
                                       }}
                                       autoComplete="off"
@@ -255,11 +290,12 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-2 sticky top-24">
-            <MapPlaceholder
+            <MapComponent
               stations={stations}
-              userAddress={userAddress}
+              userCoordinates={userCoordinates}
               selectedStationIndex={selectedStationIndex}
               onStationSelect={handleStationSelect}
+              userAddress={userAddress}
             />
           </div>
         </div>

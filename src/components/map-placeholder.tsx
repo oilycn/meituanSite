@@ -1,100 +1,173 @@
 "use client";
 
-import Image from "next/image";
-import { MapPin } from "lucide-react";
-import { cn } from "@/lib/utils";
+import React, { useEffect, useRef, useState } from 'react';
+import AMapLoader from '@amap/amap-jsapi-loader';
+import { Skeleton } from './ui/skeleton';
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
+import { MapPin } from 'lucide-react';
 
-type MapPlaceholderProps = {
+interface MapComponentProps {
   stations: FindNearestStationsOutput;
-  userAddress: string | null;
+  userCoordinates: { latitude: number; longitude: number } | null;
   selectedStationIndex: number | null;
   onStationSelect: (index: number | null) => void;
-};
+  userAddress: string | null;
+}
 
-const markerPositions = [
-  { top: "30%", left: "25%" },
-  { top: "65%", left: "35%" },
-  { top: "40%", left: "70%" },
-];
-const userPosition = { top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
+// Extend Window interface for AMap
+declare global {
+  interface Window {
+    _AMapSecurityConfig: {
+      securityJsCode: string;
+    };
+    AMap: any;
+  }
+}
 
-export function MapPlaceholder({
+export function MapComponent({
   stations,
-  userAddress,
+  userCoordinates,
   selectedStationIndex,
   onStationSelect,
-}: MapPlaceholderProps) {
+  userAddress
+}: MapComponentProps) {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<any>(null);
+  const markers = useRef<any[]>([]);
+  const userMarker = useRef<any>(null);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [isApiLoaded, setIsApiLoaded] = useState(false);
+
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_AMAP_KEY && process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
+        window._AMapSecurityConfig = {
+            securityJsCode: process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE,
+        };
+    }
+
+    AMapLoader.load({
+      key: process.env.NEXT_PUBLIC_AMAP_KEY || "", // Amap Key
+      version: "2.0",
+      plugins: ['AMap.Marker', 'AMap.Icon', 'AMap.Pixel'],
+    })
+      .then((AMap) => {
+        setIsApiLoaded(true);
+      })
+      .catch((e) => {
+        console.error("Failed to load AMap:", e);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (isApiLoaded && mapContainer.current && !map.current) {
+        const AMap = window.AMap;
+        map.current = new AMap.Map(mapContainer.current, {
+            zoom: 14,
+            center: [121.4737, 31.2304], // Default to Shanghai People's Square
+            viewMode: '2D',
+            mapStyle: 'amap://styles/whitesmoke',
+        });
+        
+        map.current.on('complete', () => {
+             setIsMapLoaded(true);
+        });
+
+        return () => {
+            map.current?.destroy();
+            map.current = null;
+        };
+    }
+  }, [isApiLoaded]);
+
+  useEffect(() => {
+    if (isMapLoaded) {
+        const AMap = window.AMap;
+        // Clear previous markers
+        map.current.remove(markers.current);
+        markers.current = [];
+        if(userMarker.current) {
+            map.current.remove(userMarker.current);
+            userMarker.current = null;
+        }
+
+        // Add user marker
+        if (userCoordinates) {
+            const userIcon = new AMap.Icon({
+                size: new AMap.Size(40, 40),
+                image: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="hsl(var(--destructive))" stroke="white" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>'),
+                imageSize: new AMap.Size(40, 40),
+            });
+            userMarker.current = new AMap.Marker({
+                position: [userCoordinates.longitude, userCoordinates.latitude],
+                map: map.current,
+                icon: userIcon,
+                anchor: 'bottom-center',
+                title: userAddress || '',
+            });
+            map.current.setCenter([userCoordinates.longitude, userCoordinates.latitude]);
+            map.current.setZoom(14);
+        }
+
+        // Add station markers
+        stations.forEach((station, index) => {
+            const isSelected = selectedStationIndex === index;
+            const markerContent = `
+                <div style="position: relative; text-align: center; color: white; font-weight: bold; font-size: 14px; width: 32px; height: 32px;
+                            background-color: ${isSelected ? 'hsl(var(--accent))' : 'hsl(var(--primary))'};
+                            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                            border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                            transform: ${isSelected ? 'scale(1.2)' : 'scale(1)'}; transition: transform 0.2s ease; cursor: pointer;">
+                    ${index + 1}
+                </div>
+            `;
+
+            const marker = new AMap.Marker({
+                position: [station.longitude, station.latitude],
+                map: map.current,
+                content: markerContent,
+                anchor: 'center',
+                title: station.name,
+            });
+            
+            marker.on('click', () => {
+                onStationSelect(index === selectedStationIndex ? null : index);
+            });
+
+            markers.current.push(marker);
+        });
+        
+        if (stations.length > 0 && !userCoordinates) {
+             map.current.setFitView(undefined, false, [60, 60, 60, 60]);
+        }
+
+    }
+  }, [stations, userCoordinates, userAddress, isMapLoaded, selectedStationIndex, onStationSelect]);
+
+  useEffect(() => {
+    if (isMapLoaded && selectedStationIndex !== null && stations[selectedStationIndex]) {
+        const station = stations[selectedStationIndex];
+        map.current.panTo([station.longitude, station.latitude]);
+        map.current.setZoom(15);
+    }
+  }, [selectedStationIndex, isMapLoaded, stations]);
+
+
+  if (!process.env.NEXT_PUBLIC_AMAP_KEY || !process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
+      return (
+          <div className="relative w-full aspect-square lg:aspect-auto lg:h-full min-h-[400px] rounded-xl overflow-hidden bg-muted border shadow-lg flex items-center justify-center text-center text-muted-foreground p-4">
+              <div>
+                  <MapPin className="mx-auto h-12 w-12" />
+                  <p className="mt-4 font-medium">高德地图API密钥未配置</p>
+                  <p className="text-sm mt-2">请在 `.env` 文件中设置 `NEXT_PUBLIC_AMAP_KEY` 和 `NEXT_PUBLIC_AMAP_SECURITY_JS_CODE` 来启用地图功能。</p>
+              </div>
+          </div>
+      );
+  }
+
   return (
     <div className="relative w-full aspect-square lg:aspect-auto lg:h-full min-h-[400px] rounded-xl overflow-hidden bg-muted border shadow-lg">
-      <Image
-        src="https://placehold.co/1200x1200.png"
-        alt="Map background"
-        fill
-        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-        className="opacity-10 object-cover"
-        data-ai-hint="abstract map pattern"
-      />
-      <div className="absolute inset-0 transition-opacity duration-500" style={{ opacity: userAddress ? 1 : 0 }}>
-        {userAddress && (
-          <div
-            className="absolute transition-all duration-500 ease-in-out"
-            style={{ ...userPosition }}
-            title={userAddress}
-          >
-            <div className="relative flex flex-col items-center animate-in fade-in zoom-in-50">
-              <MapPin
-                className="w-10 h-10 text-destructive drop-shadow-lg"
-                style={{ fill: "hsl(var(--destructive) / 0.4)"}}
-              />
-              <span className="mt-2 px-3 py-1 text-sm font-bold text-white bg-destructive rounded-full shadow-lg">
-                您
-              </span>
-            </div>
-          </div>
-        )}
-
-        {stations.map((station, index) => (
-          <button
-            key={station.name}
-            className="absolute transition-all duration-300"
-            style={{ ...markerPositions[index], transform: "translate(-50%, -50%)" }}
-            onClick={() => onStationSelect(index === selectedStationIndex ? null : index)}
-            aria-label={`选择站点：${station.name}`}
-          >
-            <div
-              className={cn(
-                "relative flex flex-col items-center cursor-pointer transform-gpu transition-transform duration-300 ease-out animate-in fade-in zoom-in-50",
-                selectedStationIndex === index ? "scale-125 z-10" : "scale-100"
-              )}
-              style={{ animationDelay: `${(index + 1) * 100}ms`}}
-            >
-              <MapPin
-                className={cn(
-                  "w-8 h-8 text-primary drop-shadow-md transition-all duration-300",
-                )}
-                style={{ fill: `hsl(var(--primary) / ${selectedStationIndex === index ? '0.6' : '0.3'})`}}
-              />
-              <span
-                className={cn(
-                  "mt-2 px-2 py-0.5 text-xs font-semibold text-primary-foreground bg-primary rounded-full shadow-md whitespace-nowrap transition-all duration-300",
-                  selectedStationIndex === index && "ring-2 ring-offset-2 ring-offset-background ring-primary"
-                )}
-              >
-                {index + 1}
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
-       {!userAddress && (
-        <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-                <MapPin className="mx-auto h-12 w-12" />
-                <p className="mt-4 font-medium">地图将在此处显示</p>
-            </div>
-        </div>
-      )}
+      <div ref={mapContainer} className="w-full h-full" />
+      {!isMapLoaded && <Skeleton className="absolute inset-0" />}
     </div>
   );
 }

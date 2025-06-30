@@ -261,37 +261,63 @@ export default function Home() {
   
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
-      toast({ variant: "destructive", title: "错误", description: "您的浏览器不支持地理定位。" });
+      toast({ variant: 'destructive', title: '错误', description: '您的浏览器不支持地理定位。' });
       return;
     }
     if (!geocoder) {
-      toast({ variant: "destructive", title: "错误", description: "地理编码服务尚未准备好。" });
+      toast({ variant: 'destructive', title: '错误', description: '地理编码服务尚未准备好。' });
       return;
     }
 
     setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const lnglat = [longitude, latitude];
+    setStations([]);
+    setSelectedStationIndex(null);
+    setUserCoordinates(null);
 
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const coords = { latitude, longitude };
+
+        setUserCoordinates(coords);
+
+        const stationResult = await getNearestStations(coords);
+        if (stationResult.error) {
+          toast({ variant: 'destructive', title: '错误', description: stationResult.error });
+        } else if (stationResult.data) {
+          setStations(stationResult.data.stations);
+        }
+
+        const lnglat = [longitude, latitude];
         geocoder.getAddress(lnglat, (status: string, result: any) => {
           if (status === 'complete' && result.regeocode) {
             const address = result.regeocode.formattedAddress;
-            form.setValue("address", address);
-            onSubmit({ address: address });
+            form.setValue('address', address);
+            setUserAddress(address);
+
+            const newHistory = [
+              address,
+              ...addressHistory.filter((item) => item !== address),
+            ].slice(0, 5);
+            setAddressHistory(newHistory);
+            try {
+              localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
+            } catch (e) {
+              console.error('Failed to save address history to localStorage', e);
+            }
           } else {
-            toast({ variant: "destructive", title: "错误", description: "无法获取当前位置的地址信息。" });
+            toast({ variant: 'destructive', title: '错误', description: '无法获取当前位置的地址信息。' });
+            setUserAddress('您的位置');
           }
           setIsLocating(false);
         });
       },
       (error) => {
-        let message = "无法获取您的位置。";
+        let message = '无法获取您的位置。';
         if (error.code === error.PERMISSION_DENIED) {
-          message = "您已拒绝位置权限，请在浏览器设置中开启。";
+          message = '您已拒绝位置权限，请在浏览器设置中开启。';
         }
-        toast({ variant: "destructive", title: "定位失败", description: message });
+        toast({ variant: 'destructive', title: '定位失败', description: message });
         setIsLocating(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }

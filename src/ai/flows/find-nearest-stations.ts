@@ -2,9 +2,9 @@
 
 /**
  * @fileOverview
- * - A flow to find the three nearest Meituan stations from a given set of coordinates from a predefined list.
+ * - A flow to find all Meituan stations from a predefined list, sorted by distance from a given set of coordinates.
  *
- * - findNearestStations - A function that finds the three nearest Meituan stations.
+ * - findNearestStations - A function that sorts all Meituan stations by distance.
  * - FindNearestStationsInput - The input type for the findNearestStations function.
  * - FindNearestStationsOutput - The return type for the findNearestStations function.
  */
@@ -13,7 +13,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { wuhanStations } from '@/lib/stations';
 
-// === Schemas (remain the same) ===
+// === Schemas ===
 const FindNearestStationsInputSchema = z.object({
   latitude: z.number().describe("The latitude of the user's location."),
   longitude: z.number().describe("The longitude of the user's location."),
@@ -29,7 +29,7 @@ const StationDetailsSchema = z.object({
 });
 
 const FindNearestStationsOutputSchema = z.object({
-    stations: z.array(StationDetailsSchema).max(3).describe('The three nearest Meituan stations.'),
+    stations: z.array(StationDetailsSchema).describe('An array of Meituan stations, sorted by distance.'),
 });
 export type FindNearestStationsOutput = z.infer<typeof FindNearestStationsOutputSchema>;
 
@@ -60,7 +60,7 @@ export async function findNearestStations(input: FindNearestStationsInput): Prom
 
 
 // === The Flow ===
-// No longer uses an AI prompt. It calculates the nearest stations from a static list.
+// It calculates the distance for all stations from a static list and returns them sorted.
 const findNearestStationsFlow = ai.defineFlow(
   {
     name: 'findNearestStationsFlow',
@@ -75,10 +75,10 @@ const findNearestStationsFlow = ai.defineFlow(
 
     stationsWithDistance.sort((a, b) => a.distance - b.distance);
 
-    const nearestStations = stationsWithDistance.slice(0, 3).map(({ distance, ...station }) => station);
+    const sortedStations = stationsWithDistance.map(({ distance, ...station }) => station);
 
     return {
-      stations: nearestStations,
+      stations: sortedStations,
     };
   }
 );

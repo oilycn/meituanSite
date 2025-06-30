@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Search, MapPin, History } from "lucide-react";
+import { Loader2, Search, MapPin, History, ArrowLeft } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
 import { wuhanStations } from "@/lib/stations";
+import { StationDetails } from "@/components/station-details";
 
 
 const MapComponent = dynamic(
@@ -67,6 +68,9 @@ export default function Home() {
   const [autoComplete, setAutoComplete] = useState<any>(null);
   const [geocoder, setGeocoder] = useState<any>(null);
 
+  const [viewMode, setViewMode] = useState<'search' | 'results'>('search');
+  const [routeDetails, setRouteDetails] = useState<{ distance: string; time: string; } | null>(null);
+
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -76,6 +80,19 @@ export default function Home() {
   });
 
   const addressValue = form.watch("address");
+
+  const resetToInitialState = useCallback(() => {
+    const initialStations = wuhanStations.map(station => ({
+      ...station,
+      distance: 0,
+    }));
+    setStations(initialStations);
+    setUserAddress(null);
+    setUserCoordinates(null);
+    setSelectedStationIndex(null);
+    setRouteDetails(null);
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
     try {
@@ -102,13 +119,7 @@ export default function Home() {
           .then((AMap) => {
             setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
             setGeocoder(new AMap.Geocoder({ city: '全国' }));
-
-            const initialStations = wuhanStations.map(station => ({
-              ...station,
-              distance: 0,
-            }));
-            setStations(initialStations);
-            setIsLoading(false);
+            resetToInitialState();
           })
           .catch((e) => {
             console.error("Failed to load AMap services:", e);
@@ -123,7 +134,6 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced effect for address suggestions
   useEffect(() => {
     if (!addressValue || addressValue.length < 2) {
       setSuggestions([]);
@@ -154,7 +164,7 @@ export default function Home() {
           setIsPopoverOpen(false);
         }
       });
-    }, 500); // 500ms debounce delay
+    }, 500);
 
     return () => {
       clearTimeout(handler);
@@ -170,10 +180,10 @@ export default function Home() {
 
     setIsPopoverOpen(false);
     setIsSearching(true);
-    setStations([]);
     setUserAddress(values.address);
     setSelectedStationIndex(null);
     setUserCoordinates(null);
+    setRouteDetails(null);
 
     const geocodePromise = new Promise<{latitude: number, longitude: number} | null>((resolve) => {
       geocoder.getLocation(values.address, (status: string, result: any) => {
@@ -195,10 +205,11 @@ export default function Home() {
           toast({ variant: "destructive", title: "错误", description: result.error });
         } else if (result.data) {
           setStations(result.data.stations);
+          setViewMode('results');
            const newHistory = [
              values.address,
              ...addressHistory.filter(item => item !== values.address)
-           ].slice(0, 5); // Keep latest 5, remove duplicates
+           ].slice(0, 5); 
            setAddressHistory(newHistory);
            localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
 
@@ -231,20 +242,12 @@ export default function Home() {
   
   const handleLocateMe = async () => {
     if (!navigator.geolocation) {
-      toast({
-        variant: 'destructive',
-        title: '定位失败',
-        description: '您的浏览器不支持定位功能。',
-      });
+      toast({ variant: 'destructive', title: '定位失败', description: '您的浏览器不支持定位功能。' });
       return;
     }
   
     if (!geocoder) {
-      toast({
-        variant: 'destructive',
-        title: '错误',
-        description: '地理编码服务尚未准备好，请稍后再试。',
-      });
+      toast({ variant: 'destructive', title: '错误', description: '地理编码服务尚未准备好，请稍后再试。' });
       return;
     }
   
@@ -263,12 +266,10 @@ export default function Home() {
       const { latitude, longitude } = position.coords;
       const coords = { latitude, longitude };
   
-      // Reset states for new search
-      setStations([]);
       setSelectedStationIndex(null);
+      setRouteDetails(null);
       setUserCoordinates(coords);
   
-      // Fetch stations and geocode address in parallel
       const stationsPromise = getNearestStations(coords);
       const addressPromise = new Promise<string>((resolve) => {
         geocoder.getAddress([longitude, latitude], (status: string, result: any) => {
@@ -276,25 +277,20 @@ export default function Home() {
             resolve(result.regeocode.formattedAddress);
           } else {
             console.error('逆地理编码失败', result);
-            resolve('我的位置'); // Fallback address
+            resolve('我的位置');
           }
         });
       });
   
       const [stationResult, locatedAddress] = await Promise.all([stationsPromise, addressPromise]);
   
-      // Update stations
       if (stationResult.error) {
-        toast({
-          variant: 'destructive',
-          title: '站点搜索失败',
-          description: stationResult.error,
-        });
+        toast({ variant: 'destructive', title: '站点搜索失败', description: stationResult.error });
       } else if (stationResult.data) {
         setStations(stationResult.data.stations);
+        setViewMode('results');
       }
   
-      // Update address and history
       form.setValue('address', locatedAddress);
       setUserAddress(locatedAddress);
   
@@ -304,28 +300,17 @@ export default function Home() {
           ...addressHistory.filter((item) => item !== locatedAddress),
         ].slice(0, 5);
         setAddressHistory(newHistory);
-        localStorage.setItem(
-          'meituan_address_history',
-          JSON.stringify(newHistory)
-        );
+        localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
       } else {
         toast({ title: '定位成功', description: '已在地图上标记您的位置。' });
       }
     } catch (error: any) {
       let errorMessage = '无法获取您的位置信息。';
-      if (error.code === 1) { // PERMISSION_DENIED
-        errorMessage = '定位失败：用户已拒绝共享位置信息。';
-      } else if (error.code === 2) { // POSITION_UNAVAILABLE
-        errorMessage = '定位失败：无法确定设备位置。';
-      } else if (error.code === 3) { // TIMEOUT
-        errorMessage = '定位失败：请求超时。';
-      }
+      if (error.code === 1) { errorMessage = '定位失败：用户已拒绝共享位置信息。'; }
+      else if (error.code === 2) { errorMessage = '定位失败：无法确定设备位置。'; }
+      else if (error.code === 3) { errorMessage = '定位失败：请求超时。'; }
       
-      toast({
-        variant: 'destructive',
-        title: '定位失败',
-        description: error.message || errorMessage,
-      });
+      toast({ variant: 'destructive', title: '定位失败', description: error.message || errorMessage });
       form.setValue('address', '');
       setUserAddress(null);
     } finally {
@@ -342,7 +327,16 @@ export default function Home() {
 
   const handleStationSelect = useCallback((index: number | null) => {
     setSelectedStationIndex(index);
+    if (index === null) {
+      setRouteDetails(null);
+    }
   }, []);
+
+  const handleNewSearch = () => {
+    setViewMode('search');
+    resetToInitialState();
+    form.reset({ address: "" });
+  };
 
   const totalLoading = isLoading || isSearching || isLocating;
 
@@ -367,110 +361,126 @@ export default function Home() {
             selectedStationIndex={selectedStationIndex}
             onStationSelect={handleStationSelect}
             userAddress={userAddress}
+            onRoutePlanned={setRouteDetails}
           />
         </div>
 
         <div className="absolute top-4 left-4 z-10 w-full max-w-sm">
-            <Card className="shadow-2xl">
-              <CardHeader>
-                <CardTitle>查找附近站点</CardTitle>
-                <CardDescription>输入地址，查找最近的美团站点。</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <FormField
-                      control={form.control}
-                      name="address"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>您的地址</FormLabel>
-                            <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-                              <PopoverAnchor asChild>
-                                <FormControl>
-                                  <div className="relative">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="absolute left-1.5 top-1/2 -translate-y-1/2 h-7 w-7 z-10 text-muted-foreground hover:text-foreground"
-                                      onClick={handleLocateMe}
-                                      disabled={totalLoading}
-                                      aria-label="定位到当前位置"
-                                    >
-                                      {isLocating ? <Loader2 className="animate-spin" /> : <MapPin className="h-5 w-5" />}
-                                    </Button>
-                                    <Input
-                                      placeholder="例如：武汉市常青花园十四小区"
-                                      {...field}
-                                      autoComplete="off"
-                                      className="pl-10"
-                                      onFocus={handleInputFocus}
-                                      />
-                                  </div>
-                                </FormControl>
-                              </PopoverAnchor>
-                              <PopoverContent 
-                                align="start" 
-                                className="w-[var(--radix-popover-anchor-width)] p-0"
-                                onOpenAutoFocus={(e) => e.preventDefault()}
-                              >
-                                {popoverMode === 'suggestions' && suggestions.length > 0 && (
-                                  <ul className="py-1">
-                                    {suggestions.map((suggestion, index) => (
-                                      <li
-                                        key={index}
-                                        className="px-3 py-2 cursor-pointer hover:bg-accent rounded-md"
-                                        onClick={() => handleSuggestionClick(suggestion.district + suggestion.name)}
-                                        onMouseDown={(e) => e.preventDefault()}
-                                      >
-                                        <div className="text-sm font-medium">{suggestion.name}</div>
-                                        <div className="text-xs text-muted-foreground">{suggestion.district}</div>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                                {popoverMode === 'history' && addressHistory.length > 0 && (
-                                  <div className="py-1">
-                                      <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">搜索历史</div>
-                                      <ul className="space-y-1">
-                                          {addressHistory.map((item, index) => (
-                                              <li
-                                                key={index}
-                                                className="flex items-center px-3 py-2 cursor-pointer hover:bg-accent rounded-md text-sm"
-                                                onClick={() => handleHistoryClick(item)}
-                                                onMouseDown={(e) => e.preventDefault()}
-                                              >
-                                                <History className="w-4 h-4 mr-2 flex-shrink-0 text-muted-foreground" />
-                                                <span className="truncate">{item}</span>
-                                              </li>
-                                          ))}
-                                      </ul>
-                                  </div>
-                                )}
-                              </PopoverContent>
-                            </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+            {viewMode === 'search' ? (
+                <Card className="shadow-2xl">
+                <CardHeader>
+                    <CardTitle>查找附近站点</CardTitle>
+                    <CardDescription>输入地址，查找最近的美团站点。</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        <FormField
+                        control={form.control}
+                        name="address"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>您的地址</FormLabel>
+                                <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                                <PopoverAnchor asChild>
+                                    <FormControl>
+                                    <div className="relative">
+                                        <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute left-1.5 top-1/2 -translate-y-1/2 h-7 w-7 z-10 text-muted-foreground hover:text-foreground"
+                                        onClick={handleLocateMe}
+                                        disabled={totalLoading}
+                                        aria-label="定位到当前位置"
+                                        >
+                                        {isLocating ? <Loader2 className="animate-spin" /> : <MapPin className="h-5 w-5" />}
+                                        </Button>
+                                        <Input
+                                        placeholder="例如：武汉市常青花园十四小区"
+                                        {...field}
+                                        autoComplete="off"
+                                        className="pl-10"
+                                        onFocus={handleInputFocus}
+                                        />
+                                    </div>
+                                    </FormControl>
+                                </PopoverAnchor>
+                                <PopoverContent 
+                                    align="start" 
+                                    className="w-[var(--radix-popover-anchor-width)] p-0"
+                                    onOpenAutoFocus={(e) => e.preventDefault()}
+                                >
+                                    {popoverMode === 'suggestions' && suggestions.length > 0 && (
+                                    <ul className="py-1">
+                                        {suggestions.map((suggestion, index) => (
+                                        <li
+                                            key={index}
+                                            className="px-3 py-2 cursor-pointer hover:bg-accent rounded-md"
+                                            onClick={() => handleSuggestionClick(suggestion.district + suggestion.name)}
+                                            onMouseDown={(e) => e.preventDefault()}
+                                        >
+                                            <div className="text-sm font-medium">{suggestion.name}</div>
+                                            <div className="text-xs text-muted-foreground">{suggestion.district}</div>
+                                        </li>
+                                        ))}
+                                    </ul>
+                                    )}
+                                    {popoverMode === 'history' && addressHistory.length > 0 && (
+                                    <div className="py-1">
+                                        <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">搜索历史</div>
+                                        <ul className="space-y-1">
+                                            {addressHistory.map((item, index) => (
+                                                <li
+                                                    key={index}
+                                                    className="flex items-center px-3 py-2 cursor-pointer hover:bg-accent rounded-md text-sm"
+                                                    onClick={() => handleHistoryClick(item)}
+                                                    onMouseDown={(e) => e.preventDefault()}
+                                                >
+                                                    <History className="w-4 h-4 mr-2 flex-shrink-0 text-muted-foreground" />
+                                                    <span className="truncate">{item}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    )}
+                                </PopoverContent>
+                                </Popover>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                        <Button type="submit" className="w-full" disabled={totalLoading}>
+                        {isSearching || isLoading ? (
+                            <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            正在搜索...
+                            </>
+                        ) : (
+                            <>
+                            <Search className="mr-2 h-4 w-4" />
+                            搜索
+                            </>
+                        )}
+                        </Button>
+                    </form>
+                    </Form>
+                </CardContent>
+                </Card>
+            ) : (
+                <div className="space-y-2">
+                    <StationDetails
+                        stations={stations}
+                        selectedStationIndex={selectedStationIndex}
+                        onStationSelect={handleStationSelect}
+                        routeDetails={routeDetails}
                     />
-                    <Button type="submit" className="w-full" disabled={totalLoading}>
-                      {isSearching || isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          正在搜索...
-                        </>
-                      ) : (
-                        <>
-                          <Search className="mr-2 h-4 w-4" />
-                          搜索
-                        </>
-                      )}
+                    <Button variant="outline" className="w-full" onClick={handleNewSearch}>
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        返回并开始新搜索
                     </Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
+                </div>
+            )}
         </div>
       </main>
     </div>

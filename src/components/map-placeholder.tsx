@@ -11,6 +11,7 @@ interface MapComponentProps {
   selectedStationIndex: number | null;
   onStationSelect: (index: number | null) => void;
   userAddress: string | null;
+  onRoutePlanned: (details: { distance: string; time: string } | null) => void;
 }
 
 // Extend Window interface for AMap
@@ -28,7 +29,8 @@ export function MapComponent({
   userCoordinates,
   selectedStationIndex,
   onStationSelect,
-  userAddress
+  userAddress,
+  onRoutePlanned
 }: MapComponentProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
@@ -37,6 +39,8 @@ export function MapComponent({
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isApiLoaded, setIsApiLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [driving, setDriving] = useState<any>(null);
+  const routePolyline = useRef<any>(null);
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_AMAP_KEY && process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
@@ -47,9 +51,9 @@ export function MapComponent({
 
     import('@amap/amap-jsapi-loader').then(({ default: AMapLoader }) => {
         AMapLoader.load({
-        key: process.env.NEXT_PUBLIC_AMAP_KEY || "", // Amap Key
+        key: process.env.NEXT_PUBLIC_AMAP_KEY || "",
         version: "2.0",
-        plugins: ['AMap.Marker', 'AMap.Icon', 'AMap.Pixel'],
+        plugins: ['AMap.Marker', 'AMap.Icon', 'AMap.Pixel', 'AMap.Driving'],
         })
         .then((AMap) => {
             setIsApiLoaded(true);
@@ -65,11 +69,16 @@ export function MapComponent({
     if (isApiLoaded && mapContainer.current && !map.current) {
         const AMap = window.AMap;
         map.current = new AMap.Map(mapContainer.current, {
-            zoom: 14,
-            center: [114.238491, 30.635848], // Default to Wuhan
+            zoom: 11,
+            center: [114.3055, 30.5928], // Wuhan center
             viewMode: '2D',
             mapStyle: 'amap://styles/whitesmoke',
         });
+
+        setDriving(new AMap.Driving({
+            map: map.current,
+            policy: AMap.DrivingPolicy.LEAST_TIME,
+        }));
         
         map.current.on('complete', () => {
              setIsMapLoaded(true);
@@ -85,7 +94,6 @@ export function MapComponent({
   useEffect(() => {
     if (isMapLoaded) {
       const AMap = window.AMap;
-      // Clear previous markers
       map.current.remove(markers.current);
       markers.current = [];
       if (userMarker.current) {
@@ -95,7 +103,6 @@ export function MapComponent({
 
       const allMapElements: any[] = [];
 
-      // Add user marker
       if (userCoordinates) {
         const userIcon = new AMap.Icon({
           size: new AMap.Size(40, 40),
@@ -116,11 +123,9 @@ export function MapComponent({
         allMapElements.push(userMarker.current);
       }
 
-      // Add station markers
       stations.forEach((station, index) => {
         const isSelected = selectedStationIndex === index;
-
-        const distanceInfo = index < 3 && station.distance
+        const distanceInfo = index < 3 && station.distance > 0
           ? `<div style="background-color: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); border-radius: 9999px; padding: 2px 8px; font-size: 12px; font-weight: 700; margin-top: 5px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">${station.distance.toFixed(2)} km</div>`
           : '';
 
@@ -155,33 +160,58 @@ export function MapComponent({
         allMapElements.push(marker);
       });
 
-      // Set map view to fit all markers
-      if (allMapElements.length > 0) {
+      if (allMapElements.length > 0 && selectedStationIndex === null) {
         map.current.setFitView(
           allMapElements,
-          false, // animate
-          [80, 80, 80, 80], // padding [B, R, T, L]
-          16 // maxZoom
+          false,
+          [100, 450, 100, 100], // padding [B, R, T, L]
+          16
         );
       }
     }
-  }, [
-    stations,
-    userCoordinates,
-    userAddress,
-    isMapLoaded,
-    selectedStationIndex,
-    onStationSelect,
-  ]);
+  }, [stations, userCoordinates, userAddress, isMapLoaded, selectedStationIndex, onStationSelect]);
 
   useEffect(() => {
-    if (isMapLoaded && selectedStationIndex !== null && stations[selectedStationIndex]) {
-        const station = stations[selectedStationIndex];
-        map.current.panTo([station.longitude, station.latitude]);
-        map.current.setZoom(15);
+    if (routePolyline.current) {
+        map.current.remove(routePolyline.current);
+        routePolyline.current = null;
     }
-  }, [selectedStationIndex, isMapLoaded, stations]);
+    onRoutePlanned(null);
 
+    if (isMapLoaded && driving && selectedStationIndex !== null && userCoordinates && stations[selectedStationIndex]) {
+        const startLngLat = [userCoordinates.longitude, userCoordinates.latitude];
+        const endLngLat = [stations[selectedStationIndex].longitude, stations[selectedStationIndex].latitude];
+
+        driving.search(startLngLat, endLngLat, (status: string, result: any) => {
+            if (status === 'complete' && result.routes && result.routes.length) {
+                const route = result.routes[0];
+                
+                const path = route.path.map((p: any) => [p.lng, p.lat]);
+                const polyline = new window.AMap.Polyline({
+                    path: path,
+                    borderWeight: 2,
+                    strokeColor: 'hsl(var(--primary))',
+                    strokeOpacity: 0.9,
+                    strokeWeight: 6,
+                    strokeStyle: 'solid',
+                });
+                routePolyline.current = polyline;
+                map.current.add(polyline);
+                
+                map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, [80, 80, 80, 80], 16);
+
+                const distanceInKm = (route.distance / 1000).toFixed(2);
+                const timeInMinutes = Math.round(route.time / 60);
+                onRoutePlanned({
+                    distance: `${distanceInKm} 公里`,
+                    time: `${timeInMinutes} 分钟`,
+                });
+            } else {
+                console.error('获取驾车数据显示失败', result);
+            }
+        });
+    }
+  }, [selectedStationIndex, userCoordinates, driving, isMapLoaded, onRoutePlanned, stations]);
 
   if (!process.env.NEXT_PUBLIC_AMAP_KEY || !process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
       return (

@@ -93,6 +93,7 @@ export default function Home() {
     setSelectedStationIndex(null);
     setRouteDetails(null);
     setIsLoading(false);
+    setViewMode('search');
   }, []);
 
   useEffect(() => {
@@ -338,9 +339,7 @@ export default function Home() {
   };
 
   const handleNewSearch = () => {
-    setViewMode('search');
     resetToInitialState();
-    form.reset({ address: "" });
   };
 
   const totalLoading = isLoading || isSearching || isLocating;
@@ -371,9 +370,9 @@ export default function Home() {
           />
         </div>
 
-        <div className="absolute top-4 left-4 z-10 w-full max-w-sm">
+        <div className="absolute bottom-0 left-0 right-0 md:top-4 md:left-4 md:w-full md:max-w-sm md:bottom-auto z-10">
             {viewMode === 'search' ? (
-                <Card className="shadow-2xl">
+                <Card className="shadow-2xl m-2 md:m-0">
                 <CardHeader>
                     <CardTitle>查找附近站点</CardTitle>
                     <CardDescription>输入地址，查找最近的美团站点。</CardDescription>
@@ -474,7 +473,7 @@ export default function Home() {
                 </CardContent>
                 </Card>
             ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 m-2 md:m-0">
                     <StationDetails
                         stations={stations}
                         selectedStationIndex={selectedStationIndex}
@@ -482,6 +481,8 @@ export default function Home() {
                         routeDetails={routeDetails}
                         travelMode={travelMode}
                         onTravelModeChange={handleTravelModeChange}
+                        userAddress={userAddress}
+                        userCoordinates={userCoordinates}
                     />
                     <Button variant="outline" className="w-full" onClick={handleNewSearch}>
                         <ArrowLeft className="mr-2 h-4 w-4" />

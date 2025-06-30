@@ -4,8 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
 import { cn } from "@/lib/utils";
-import { Car, Phone, MapPin, Clock, Footprints, Bike, Bus } from "lucide-react";
+import { Car, Phone, MapPin, Clock, Footprints, Bike, Bus, Copy } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 interface StationDetailsProps {
   stations: FindNearestStationsOutput['stations'];
@@ -14,6 +16,8 @@ interface StationDetailsProps {
   routeDetails: { distance: string; time: string; } | null;
   travelMode: 'driving' | 'walking' | 'biking' | 'transit';
   onTravelModeChange: (mode: 'driving' | 'walking' | 'biking' | 'transit') => void;
+  userAddress: string | null;
+  userCoordinates: { latitude: number; longitude: number } | null;
 }
 
 const travelModeConfig = {
@@ -23,17 +27,52 @@ const travelModeConfig = {
     transit: { icon: Bus, label: "公交" },
 };
 
-export function StationDetails({ stations, selectedStationIndex, onStationSelect, routeDetails, travelMode, onTravelModeChange }: StationDetailsProps) {
+export function StationDetails({ stations, selectedStationIndex, onStationSelect, routeDetails, travelMode, onTravelModeChange, userAddress, userCoordinates }: StationDetailsProps) {
+  const { toast } = useToast();
+  
+  const handleCopyCoords = () => {
+    if (userCoordinates) {
+      const coordsString = `${userCoordinates.latitude}, ${userCoordinates.longitude}`;
+      navigator.clipboard.writeText(coordsString).then(() => {
+        toast({
+          title: "复制成功",
+          description: `经纬度 (${coordsString}) 已复制到剪贴板。`,
+        });
+      }, (err) => {
+        toast({
+          variant: "destructive",
+          title: "复制失败",
+          description: "无法将经纬度复制到剪贴板。",
+        });
+        console.error('Could not copy text: ', err);
+      });
+    }
+  };
+
   if (stations.length === 0) {
     return null;
   }
   const CurrentIcon = travelModeConfig[travelMode].icon;
 
   return (
-    <Card className="shadow-2xl max-h-[calc(100vh-140px)] flex flex-col">
+    <Card className="shadow-2xl max-h-[60vh] md:max-h-[calc(100vh-140px)] flex flex-col rounded-xl md:rounded-lg bg-background/90 backdrop-blur-sm md:bg-card md:backdrop-blur-none">
       <CardHeader>
         <CardTitle>附近站点列表</CardTitle>
-        <CardDescription>共找到 {stations.length} 个站点，按距离排序。</CardDescription>
+        {userAddress ? (
+            <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="flex items-start gap-1.5 text-sm text-muted-foreground flex-1 min-w-0">
+                    <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-primary"/>
+                    <span className="truncate">您的位置: {userAddress}</span>
+                </div>
+                {userCoordinates && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={handleCopyCoords} aria-label="复制经纬度">
+                        <Copy className="w-4 h-4" />
+                    </Button>
+                )}
+            </div>
+        ) : (
+            <CardDescription>共找到 {stations.length} 个站点，按距离排序。</CardDescription>
+        )}
       </CardHeader>
       
       <div className="px-6 pb-4 border-b">

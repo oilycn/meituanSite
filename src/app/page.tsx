@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Search, MapPin, Phone, Store } from "lucide-react";
+import { Loader2, Search, MapPin, Store } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getNearestStations, getAddressSuggestions } from "@/app/actions";
+import { getNearestStations } from "@/app/actions";
 import { StationInfoCard } from "@/components/station-info-card";
 import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
@@ -34,6 +34,16 @@ const formSchema = z.object({
   }),
 });
 
+// Extend Window interface for AMap
+declare global {
+  interface Window {
+    _AMapSecurityConfig?: {
+      securityJsCode: string;
+    };
+    AMap: any;
+  }
+}
+
 export default function Home() {
   const { toast } = useToast();
   const [stations, setStations] = useState<FindNearestStationsOutput['stations']>([]);
@@ -45,7 +55,7 @@ export default function Home() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [autoComplete, setAutoComplete] = useState<any>(null);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -73,12 +83,31 @@ export default function Home() {
     };
 
     loadDefaultStations();
-    
-    return () => {
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current);
-      }
-    };
+
+    import('@amap/amap-jsapi-loader').then(({ default: AMapLoader }) => {
+        if (process.env.NEXT_PUBLIC_AMAP_KEY && process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
+            window._AMapSecurityConfig = {
+                securityJsCode: process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE,
+            };
+        }
+
+        AMapLoader.load({
+          key: process.env.NEXT_PUBLIC_AMAP_KEY || "",
+          version: "2.0",
+          plugins: ['AMap.AutoComplete'],
+        })
+          .then((AMap) => {
+            setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
+          })
+          .catch((e) => {
+            console.error("Failed to load AMap AutoComplete:", e);
+            toast({
+                variant: "destructive",
+                title: "错误",
+                description: "地址建议服务加载失败。",
+            });
+          });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -110,34 +139,32 @@ export default function Home() {
 
   const handleAddressChange = (value: string) => {
     form.setValue("address", value);
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
-
-    if (value.length < 3) {
+    
+    if (!autoComplete || value.length < 2) {
       setSuggestions([]);
       setIsPopoverOpen(false);
       return;
     }
 
     setIsSuggesting(true);
-    debounceTimeoutRef.current = setTimeout(async () => {
-      const result = await getAddressSuggestions(value);
+    autoComplete.search(value, (status: string, result: any) => {
       setIsSuggesting(false);
-      if (result.data && result.data.suggestions.length > 0) {
-        setSuggestions(result.data.suggestions);
+      if (status === 'complete' && result.tips && result.tips.length > 0) {
+        const newSuggestions = result.tips.map((tip: any) => tip.name);
+        setSuggestions(newSuggestions);
         setIsPopoverOpen(true);
       } else {
         setSuggestions([]);
         setIsPopoverOpen(false);
       }
-    }, 500);
+    });
   };
 
   const handleSuggestionClick = (suggestion: string) => {
     form.setValue("address", suggestion, { shouldValidate: true });
     setSuggestions([]);
     setIsPopoverOpen(false);
+    form.handleSubmit(onSubmit)();
   };
 
 
@@ -184,6 +211,7 @@ export default function Home() {
                                       placeholder="例如：北京市海淀区中关村"
                                       {...field}
                                       onChange={(e) => {
+                                        field.onChange(e);
                                         handleAddressChange(e.target.value);
                                       }}
                                       autoComplete="off"
@@ -214,7 +242,7 @@ export default function Home() {
                       )}
                     />
                     <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? (
+                      {isLoading && !isSuggesting ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           正在搜索...

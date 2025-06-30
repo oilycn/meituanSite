@@ -4,10 +4,6 @@ import {
   findNearestStations,
   FindNearestStationsOutput,
 } from '@/ai/flows/find-nearest-stations';
-import {
-  suggestAddresses,
-  SuggestAddressesOutput,
-} from '@/ai/flows/suggest-addresses';
 
 export async function getNearestStations(
   address: string
@@ -24,21 +20,5 @@ export async function getNearestStations(
     return {
       error: '无法为该地址找到站点。请尝试使用其他地址或检查您的连接。',
     };
-  }
-}
-
-export async function getAddressSuggestions(
-  partialAddress: string
-): Promise<{ data?: SuggestAddressesOutput; error?: string }> {
-  if (!partialAddress || partialAddress.trim().length < 2) {
-    return { data: { suggestions: [] } };
-  }
-  try {
-    const data = await suggestAddresses({ partialAddress });
-    return { data };
-  } catch (e) {
-    console.error(e);
-    // Don't bother the user with an error, just return no suggestions.
-    return { data: { suggestions: [] } };
   }
 }

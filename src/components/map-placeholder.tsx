@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import AMapLoader from '@amap/amap-jsapi-loader';
 import { Skeleton } from './ui/skeleton';
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
-import { MapPin } from 'lucide-react';
+import { MapPin, AlertTriangle } from 'lucide-react';
 
 interface MapComponentProps {
   stations: FindNearestStationsOutput;
@@ -37,6 +37,7 @@ export function MapComponent({
   const userMarker = useRef<any>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isApiLoaded, setIsApiLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_AMAP_KEY && process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
@@ -55,6 +56,7 @@ export function MapComponent({
       })
       .catch((e) => {
         console.error("Failed to load AMap:", e);
+        setLoadError("地图加载失败。请检查您的网络连接、API密钥是否正确，或稍后重试。");
       });
   }, []);
 
@@ -162,6 +164,18 @@ export function MapComponent({
               </div>
           </div>
       );
+  }
+  
+  if (loadError) {
+    return (
+      <div className="relative w-full aspect-square lg:aspect-auto lg:h-full min-h-[400px] rounded-xl overflow-hidden bg-destructive/10 border border-destructive/50 shadow-lg flex items-center justify-center text-center text-destructive p-4">
+          <div>
+              <AlertTriangle className="mx-auto h-12 w-12" />
+              <p className="mt-4 font-medium">地图加载错误</p>
+              <p className="text-sm mt-2 max-w-sm mx-auto">{loadError}</p>
+          </div>
+      </div>
+    );
   }
 
   return (

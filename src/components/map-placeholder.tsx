@@ -121,7 +121,7 @@ export function MapComponent({
         const isSelected = selectedStationIndex === index;
 
         const distanceInfo = index < 3 && station.distance
-          ? `<div style="background-color: hsla(var(--destructive), 0.1); color: hsl(var(--destructive)); border: 1px solid hsla(var(--destructive), 0.5); border-radius: 4px; padding: 1px 5px; font-size: 11px; font-weight: 600; margin-top: 4px; white-space: nowrap;">${station.distance.toFixed(2)} km</div>`
+          ? `<div style="background-color: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); border-radius: 9999px; padding: 2px 8px; font-size: 12px; font-weight: 700; margin-top: 5px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">${station.distance.toFixed(2)} km</div>`
           : '';
 
         const markerContent = `

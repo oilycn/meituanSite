@@ -119,9 +119,14 @@ export function MapComponent({
       // Add station markers
       stations.forEach((station, index) => {
         const isSelected = selectedStationIndex === index;
+
+        const distanceInfo = index < 3 && station.distance
+          ? `<div style="background-color: hsla(var(--destructive), 0.1); color: hsl(var(--destructive)); border: 1px solid hsla(var(--destructive), 0.5); border-radius: 4px; padding: 1px 5px; font-size: 11px; font-weight: 600; margin-top: 4px; white-space: nowrap;">${station.distance.toFixed(2)} km</div>`
+          : '';
+
         const markerContent = `
-          <div style="position: relative; text-align: center; width: auto; cursor: pointer;">
-            <div style="position: relative; margin: 0 auto; text-align: center; color: white; font-weight: bold; font-size: 14px; width: 28px; height: 28px; background-color: ${
+          <div style="position: relative; text-align: center; width: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center;">
+            <div style="position: relative; text-align: center; color: white; font-weight: bold; font-size: 14px; width: 28px; height: 28px; background-color: ${
               isSelected ? 'hsl(var(--accent))' : 'hsl(var(--primary))'
             }; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transform: ${
               isSelected ? 'scale(1.2)' : 'scale(1)'
@@ -131,6 +136,7 @@ export function MapComponent({
             <div style="background-color: rgba(255, 255, 255, 0.9); border-radius: 4px; padding: 2px 6px; font-size: 12px; color: #333; white-space: nowrap; margin-top: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); font-weight: 500;">
               ${station.name}
             </div>
+            ${distanceInfo}
           </div>
         `;
         const marker = new AMap.Marker({

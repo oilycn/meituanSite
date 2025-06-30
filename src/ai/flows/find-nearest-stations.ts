@@ -10,7 +10,7 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z} from 'zod';
 import { wuhanStations } from '@/lib/stations';
 
 // === Schemas ===
@@ -26,10 +26,11 @@ const StationDetailsSchema = z.object({
   phoneNumber: z.string().describe('The phone number of the Meituan station.'),
   latitude: z.number().describe('The latitude of the station. e.g. 31.2304'),
   longitude: z.number().describe('The longitude of the station. e.g. 121.4737'),
+  distance: z.number().describe('The distance from the user in kilometers.'),
 });
 
 const FindNearestStationsOutputSchema = z.object({
-    stations: z.array(StationDetailsSchema).describe('An array of Meituan stations, sorted by distance.'),
+    stations: z.array(StationDetailsSchema).describe('An array of Meituan stations, sorted by distance, with distance included.'),
 });
 export type FindNearestStationsOutput = z.infer<typeof FindNearestStationsOutputSchema>;
 
@@ -75,10 +76,8 @@ const findNearestStationsFlow = ai.defineFlow(
 
     stationsWithDistance.sort((a, b) => a.distance - b.distance);
 
-    const sortedStations = stationsWithDistance.map(({ distance, ...station }) => station);
-
     return {
-      stations: sortedStations,
+      stations: stationsWithDistance,
     };
   }
 );

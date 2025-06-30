@@ -280,60 +280,50 @@ export default function Home() {
         const { latitude, longitude } = position.coords;
         const coords = { latitude, longitude };
         
-        // We have the coordinates, this is the most important part.
-        // We can immediately set the user's location on the map.
+        // Immediately set user coordinates so the map can show the user's location
         setUserCoordinates(coords);
 
-        try {
-            // Run station search and reverse geocoding in parallel
-            const [stationResult, geocodeResult] = await Promise.all([
-                getNearestStations(coords),
-                new Promise<{ address: string | null; error?: boolean }>((resolve) => {
-                    geocoder.getAddress([longitude, latitude], (status: string, result: any) => {
-                        if (status === 'complete' && result.regeocode) {
-                            resolve({ address: result.regeocode.formattedAddress, error: false });
-                        } else {
-                            console.error("Reverse geocoding failed:", result);
-                            resolve({ address: null, error: true });
-                        }
-                    });
-                })
-            ]);
+        // Get stations first, as this is the primary goal
+        const stationResult = await getNearestStations(coords);
 
-            // Handle station search result (primary goal)
-            if (stationResult.error) {
-                toast({ variant: 'destructive', title: '站点搜索失败', description: stationResult.error });
-            } else if (stationResult.data) {
-                setStations(stationResult.data.stations);
-            }
+        if (stationResult.error) {
+            toast({ variant: 'destructive', title: '站点搜索失败', description: stationResult.error });
+            setIsLocating(false);
+            form.setValue('address', '定位失败');
+            return;
+        } 
+        
+        if (stationResult.data) {
+            setStations(stationResult.data.stations);
+        }
 
-            // Handle geocoding result (secondary goal)
-            if (geocodeResult.error || !geocodeResult.address) {
-                // Don't show a scary failure toast. Just use a placeholder.
-                const fallbackAddress = '我的位置';
-                form.setValue('address', fallbackAddress);
-                setUserAddress(fallbackAddress);
-            } else {
-                const address = geocodeResult.address;
+        // Then, try to get the address (reverse geocoding)
+        // This is secondary and should not block the primary functionality
+        geocoder.getAddress([longitude, latitude], (status: string, result: any) => {
+            if (status === 'complete' && result.regeocode) {
+                const address = result.regeocode.formattedAddress;
                 form.setValue('address', address);
                 setUserAddress(address);
 
-                // Add to history only on success
                 const newHistory = [
                   address,
                   ...addressHistory.filter((item) => item !== address),
                 ].slice(0, 5);
                 setAddressHistory(newHistory);
                 localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
+            } else {
+                console.error("Reverse geocoding failed:", result);
+                const fallbackAddress = '我的位置';
+                form.setValue('address', fallbackAddress);
+                setUserAddress(fallbackAddress);
+                toast({
+                    title: "定位成功",
+                    description: "已在地图上标记您的位置。",
+                });
             }
-
-        } catch (error) {
-            console.error("An unexpected error occurred during location processing:", error);
-            toast({ variant: 'destructive', title: '错误', description: '处理定位时发生未知错误。' });
-            form.setValue('address', '定位失败');
-        } finally {
+            // All operations are done, so stop loading
             setIsLocating(false);
-        }
+        });
       },
       (error) => {
         let message = '无法获取您的位置。';

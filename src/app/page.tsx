@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Search, MapPin, Store } from "lucide-react";
+import { Loader2, Search, MapPin, Store, History } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 import { Button } from "@/components/ui/button";
@@ -55,11 +55,15 @@ export default function Home() {
   const [userAddress, setUserAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const [selectedStationIndex, setSelectedStationIndex] = useState<number | null>(null);
   const [userCoordinates, setUserCoordinates] = useState<{latitude: number, longitude: number} | null>(null);
 
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [popoverMode, setPopoverMode] = useState<'suggestions' | 'history'>('suggestions');
+  const [addressHistory, setAddressHistory] = useState<string[]>([]);
+  
   const [autoComplete, setAutoComplete] = useState<any>(null);
   const [geocoder, setGeocoder] = useState<any>(null);
 
@@ -74,33 +78,29 @@ export default function Home() {
   const addressValue = form.watch("address");
 
   useEffect(() => {
+    try {
+      const history = localStorage.getItem('meituan_address_history');
+      if (history) {
+        setAddressHistory(JSON.parse(history));
+      }
+    } catch (e) {
+      console.error("Failed to load address history from localStorage", e);
+    }
+
     const loadInitialData = async (address: string) => {
       setIsLoading(true);
       setUserAddress(address);
       form.setValue("address", address);
 
-      // We need to geocode the default address as well
       const geocodePromise = new Promise<{latitude: number, longitude: number} | null>((resolve) => {
         const AMap = window.AMap;
-        if (!geocoder) {
-            // Geocoder might not be in state yet, but it's initialized.
-            const tempGeocoder = new AMap.Geocoder({ city: '全国' });
-            tempGeocoder.getLocation(address, (status: string, result: any) => {
-              if (status === 'complete' && result.geocodes.length) {
-                const { lat, lng } = result.geocodes[0].location;
-                resolve({ latitude: lat, longitude: lng });
-              } else {
-                resolve(null);
-              }
-            });
-            return;
-        };
-
-        geocoder.getLocation(address, (status: string, result: any) => {
+        const tempGeocoder = new AMap.Geocoder({ city: '全国' });
+        tempGeocoder.getLocation(address, (status: string, result: any) => {
           if (status === 'complete' && result.geocodes.length) {
             const { lat, lng } = result.geocodes[0].location;
             resolve({ latitude: lat, longitude: lng });
           } else {
+            console.error('Initial geocoding failed:', result);
             resolve(null);
           }
         });
@@ -137,15 +137,16 @@ export default function Home() {
         })
           .then((AMap) => {
             setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
-            setGeocoder(new AMap.Geocoder({ city: '全国' }));
+            const newGeocoder = new AMap.Geocoder({ city: '全国' });
+            setGeocoder(newGeocoder);
             loadInitialData("武汉市常青花园十四小区");
           })
           .catch((e) => {
-            console.error("Failed to load AMap AutoComplete:", e);
+            console.error("Failed to load AMap services:", e);
             toast({
                 variant: "destructive",
                 title: "错误",
-                description: "地址建议服务加载失败。",
+                description: "地图服务加载失败。",
             });
              setIsLoading(false);
           });
@@ -157,7 +158,9 @@ export default function Home() {
   useEffect(() => {
     if (!addressValue || addressValue.length < 2) {
       setSuggestions([]);
-      setIsPopoverOpen(false);
+       if (document.activeElement?.getAttribute('name') !== 'address') {
+          setIsPopoverOpen(false);
+       }
       return;
     }
 
@@ -171,6 +174,7 @@ export default function Home() {
                     name: tip.name,
                     district: tip.district,
                 })));
+                setPopoverMode('suggestions');
                 setIsPopoverOpen(true);
             } else {
                 setSuggestions([]);
@@ -202,13 +206,13 @@ export default function Home() {
     setSelectedStationIndex(null);
     setUserCoordinates(null);
 
-    const geocodePromise = new Promise<{latitude: number, longitude: number} | null>((resolve, reject) => {
+    const geocodePromise = new Promise<{latitude: number, longitude: number} | null>((resolve) => {
       geocoder.getLocation(values.address, (status: string, result: any) => {
         if (status === 'complete' && result.geocodes.length > 0) {
           const { lat, lng } = result.geocodes[0].location;
           resolve({ latitude: lat, longitude: lng });
         } else {
-          reject(new Error("无法找到该地址的坐标。"));
+          resolve(null);
         }
       });
     });
@@ -222,6 +226,13 @@ export default function Home() {
           toast({ variant: "destructive", title: "错误", description: result.error });
         } else if (result.data) {
           setStations(result.data.stations);
+           const newHistory = [
+             values.address,
+             ...addressHistory.filter(item => item !== values.address)
+           ].slice(0, 5); // Keep latest 5, remove duplicates
+           setAddressHistory(newHistory);
+           localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
+
           if (result.data.stations.length === 0) {
             toast({
                 title: "未找到站点",
@@ -229,9 +240,11 @@ export default function Home() {
             });
           }
         }
+      } else {
+         toast({ variant: "destructive", title: "地址解析失败", description: "无法找到该地址的坐标。" });
       }
     } catch(err: any) {
-       toast({ variant: "destructive", title: "地址解析失败", description: err.message });
+       toast({ variant: "destructive", title: "搜索失败", description: err.message });
     } finally {
       setIsSearching(false);
     }
@@ -239,17 +252,67 @@ export default function Home() {
 
   const handleSuggestionClick = (suggestion: string) => {
     form.setValue("address", suggestion, { shouldValidate: true });
-    setSuggestions([]);
     setIsPopoverOpen(false);
-    document.querySelector<HTMLInputElement>('input[name="address"]')?.focus();
+    onSubmit({ address: suggestion });
   };
+  
+  const handleHistoryClick = (address: string) => {
+    form.setValue("address", address, { shouldValidate: true });
+    setIsPopoverOpen(false);
+    onSubmit({ address });
+  };
+  
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      toast({ variant: "destructive", title: "错误", description: "您的浏览器不支持地理定位。" });
+      return;
+    }
+    if (!geocoder) {
+      toast({ variant: "destructive", title: "错误", description: "地理编码服务尚未准备好。" });
+      return;
+    }
 
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const lnglat = [longitude, latitude];
+
+        geocoder.getAddress(lnglat, (status: string, result: any) => {
+          if (status === 'complete' && result.regeocode) {
+            const address = result.regeocode.formattedAddress;
+            form.setValue("address", address);
+            onSubmit({ address: address });
+          } else {
+            toast({ variant: "destructive", title: "错误", description: "无法获取当前位置的地址信息。" });
+          }
+          setIsLocating(false);
+        });
+      },
+      (error) => {
+        let message = "无法获取您的位置。";
+        if (error.code === error.PERMISSION_DENIED) {
+          message = "您已拒绝位置权限，请在浏览器设置中开启。";
+        }
+        toast({ variant: "destructive", title: "定位失败", description: message });
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+  
+  const handleInputFocus = () => {
+    if (!addressValue && addressHistory.length > 0) {
+      setPopoverMode('history');
+      setIsPopoverOpen(true);
+    }
+  };
 
   const handleStationSelect = useCallback((index: number | null) => {
     setSelectedStationIndex(index);
   }, []);
 
-  const totalLoading = isLoading || isSearching;
+  const totalLoading = isLoading || isSearching || isLocating;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -285,12 +348,24 @@ export default function Home() {
                               <PopoverAnchor asChild>
                                 <FormControl>
                                   <div className="relative">
-                                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="absolute left-1.5 top-1/2 -translate-y-1/2 h-7 w-7 z-10 text-muted-foreground hover:text-foreground"
+                                      onClick={handleLocateMe}
+                                      disabled={totalLoading}
+                                      aria-label="定位到当前位置"
+                                    >
+                                      {isLocating ? <Loader2 className="animate-spin" /> : <MapPin className="h-5 w-5" />}
+                                    </Button>
                                     <Input
                                       placeholder="例如：武汉市常青花园十四小区"
                                       {...field}
                                       autoComplete="off"
-                                      className="pl-10" />
+                                      className="pl-10"
+                                      onFocus={handleInputFocus}
+                                      />
                                   </div>
                                 </FormControl>
                               </PopoverAnchor>
@@ -299,7 +374,7 @@ export default function Home() {
                                 className="w-[var(--radix-popover-anchor-width)] p-0"
                                 onOpenAutoFocus={(e) => e.preventDefault()}
                               >
-                                {suggestions.length > 0 && (
+                                {popoverMode === 'suggestions' && suggestions.length > 0 && (
                                   <ul className="py-1">
                                     {suggestions.map((suggestion, index) => (
                                       <li
@@ -313,6 +388,24 @@ export default function Home() {
                                       </li>
                                     ))}
                                   </ul>
+                                )}
+                                {popoverMode === 'history' && addressHistory.length > 0 && (
+                                  <div className="py-1">
+                                      <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">搜索历史</div>
+                                      <ul className="space-y-1">
+                                          {addressHistory.map((item, index) => (
+                                              <li
+                                                key={index}
+                                                className="flex items-center px-3 py-2 cursor-pointer hover:bg-accent rounded-md text-sm"
+                                                onClick={() => handleHistoryClick(item)}
+                                                onMouseDown={(e) => e.preventDefault()}
+                                              >
+                                                <History className="w-4 h-4 mr-2 flex-shrink-0 text-muted-foreground" />
+                                                <span className="truncate">{item}</span>
+                                              </li>
+                                          ))}
+                                      </ul>
+                                  </div>
                                 )}
                               </PopoverContent>
                             </Popover>

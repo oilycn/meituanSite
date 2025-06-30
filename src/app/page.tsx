@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Search, MapPin, Store, History } from "lucide-react";
+import { Loader2, Search, MapPin, History } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getNearestStations } from "@/app/actions";
-import { StationInfoCard } from "@/components/station-info-card";
 import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
@@ -24,7 +23,7 @@ const MapComponent = dynamic(
   () => import('@/components/map-placeholder').then((mod) => mod.MapComponent),
   { 
     ssr: false,
-    loading: () => <div className="relative w-full h-full min-h-[400px] rounded-xl overflow-hidden bg-muted border shadow-lg"><Skeleton className="absolute inset-0" /></div>
+    loading: () => <div className="relative w-full h-full bg-muted"><Skeleton className="absolute inset-0" /></div>
   }
 );
 
@@ -253,13 +252,11 @@ export default function Home() {
   const handleSuggestionClick = (suggestion: string) => {
     form.setValue("address", suggestion, { shouldValidate: true });
     setIsPopoverOpen(false);
-    onSubmit({ address: suggestion });
   };
   
   const handleHistoryClick = (address: string) => {
     form.setValue("address", address, { shouldValidate: true });
     setIsPopoverOpen(false);
-    onSubmit({ address });
   };
   
   const handleLocateMe = () => {
@@ -315,8 +312,8 @@ export default function Home() {
   const totalLoading = isLoading || isSearching || isLocating;
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="flex flex-col h-screen">
+      <header className="sticky top-0 z-20 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <MeituanIcon className="w-8 h-8 text-primary" />
@@ -327,13 +324,22 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex-1 container py-8">
-        <div className="flex flex-col lg:flex-row gap-8">
-          <div className="w-full lg:w-[400px] xl:w-[450px] flex-shrink-0 flex flex-col gap-8">
-            <Card className="w-full shadow-lg">
+      <main className="flex-1 relative">
+        <div className="absolute inset-0 h-full w-full">
+          <MapComponent
+            stations={stations}
+            userCoordinates={userCoordinates}
+            selectedStationIndex={selectedStationIndex}
+            onStationSelect={handleStationSelect}
+            userAddress={userAddress}
+          />
+        </div>
+
+        <div className="absolute top-4 left-4 z-10 w-full max-w-sm">
+            <Card className="shadow-2xl">
               <CardHeader>
                 <CardTitle>查找附近站点</CardTitle>
-                <CardDescription>输入您的地址，查找最近的三个美团站点。</CardDescription>
+                <CardDescription>输入地址，查找最近的美团站点。</CardDescription>
               </CardHeader>
               <CardContent>
                 <Form {...form}>
@@ -430,66 +436,6 @@ export default function Home() {
                 </Form>
               </CardContent>
             </Card>
-
-            <div className="space-y-4">
-                <h2 className="text-lg font-semibold tracking-tight">搜索结果</h2>
-                {totalLoading && (
-                    <div className="space-y-4">
-                        {[...Array(3)].map((_, i) => (
-                            <Card key={i}>
-                                <CardHeader className="flex flex-row items-start gap-4 space-y-0">
-                                    <Skeleton className="h-10 w-10 rounded-full" />
-                                    <div className="flex-grow space-y-2">
-                                        <Skeleton className="h-5 w-3/4" />
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    <Skeleton className="h-4 w-full" />
-                                    <Skeleton className="h-4 w-1/2" />
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                )}
-
-                {!totalLoading && stations.length > 0 && (
-                    <div className="space-y-4">
-                        {stations.map((station, index) => (
-                            <StationInfoCard
-                                key={station.name}
-                                station={station}
-                                index={index}
-                                isSelected={selectedStationIndex === index}
-                                onClick={() => handleStationSelect(index === selectedStationIndex ? null : index)}
-                            />
-                        ))}
-                    </div>
-                )}
-
-                {!totalLoading && stations.length === 0 && (
-                     <Card className="flex flex-col items-center justify-center p-8 text-center border-dashed">
-                        <CardContent className="p-0">
-                            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                                <Store className="w-8 h-8 text-muted-foreground" />
-                            </div>
-                            <p className="text-muted-foreground">
-                                {userAddress && !isLoading ? "未找到站点。" : "您的搜索结果将显示在此处。"}
-                            </p>
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
-          </div>
-
-          <div className="flex-1 h-[50vh] lg:h-[calc(100vh-8rem)] lg:sticky top-24">
-            <MapComponent
-              stations={stations}
-              userCoordinates={userCoordinates}
-              selectedStationIndex={selectedStationIndex}
-              onStationSelect={handleStationSelect}
-              userAddress={userAddress}
-            />
-          </div>
         </div>
       </main>
     </div>

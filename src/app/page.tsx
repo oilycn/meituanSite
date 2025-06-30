@@ -65,6 +65,7 @@ export default function Home() {
   
   const [autoComplete, setAutoComplete] = useState<any>(null);
   const [geocoder, setGeocoder] = useState<any>(null);
+  const [geolocation, setGeolocation] = useState<any>(null);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -132,12 +133,18 @@ export default function Home() {
         AMapLoader.load({
           key: process.env.NEXT_PUBLIC_AMAP_KEY || "",
           version: "2.0",
-          plugins: ['AMap.AutoComplete', 'AMap.Geocoder'],
+          plugins: ['AMap.AutoComplete', 'AMap.Geocoder', 'AMap.Geolocation'],
         })
           .then((AMap) => {
             setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
             const newGeocoder = new AMap.Geocoder({ city: '全国' });
             setGeocoder(newGeocoder);
+            const newGeolocation = new AMap.Geolocation({
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0,
+            });
+            setGeolocation(newGeolocation);
             loadInitialData("武汉市常青花园十四小区");
           })
           .catch((e) => {
@@ -260,12 +267,8 @@ export default function Home() {
   };
   
   const handleLocateMe = () => {
-    if (!navigator.geolocation) {
-      toast({ variant: 'destructive', title: '错误', description: '您的浏览器不支持地理定位。' });
-      return;
-    }
-    if (!geocoder) {
-      toast({ variant: 'destructive', title: '错误', description: '地理编码服务尚未准备好。' });
+    if (!geolocation) {
+      toast({ variant: 'destructive', title: '错误', description: '定位服务尚未准备好，请稍后再试。' });
       return;
     }
 
@@ -275,67 +278,52 @@ export default function Home() {
     setUserCoordinates(null);
     form.setValue("address", "正在定位...");
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        const coords = { latitude, longitude };
+    geolocation.getCurrentPosition(async (status: string, result: any) => {
+      if (status === 'complete' && result.position) {
+        const { lat, lng } = result.position;
+        const coords = { latitude: lat, longitude: lng };
         
-        // Immediately set user coordinates so the map can show the user's location
         setUserCoordinates(coords);
 
-        // Get stations first, as this is the primary goal
         const stationResult = await getNearestStations(coords);
 
         if (stationResult.error) {
             toast({ variant: 'destructive', title: '站点搜索失败', description: stationResult.error });
-            setIsLocating(false);
-            form.setValue('address', '定位失败');
-            return;
-        } 
-        
-        if (stationResult.data) {
+        } else if (stationResult.data) {
             setStations(stationResult.data.stations);
         }
 
-        // Then, try to get the address (reverse geocoding)
-        // This is secondary and should not block the primary functionality
-        geocoder.getAddress([longitude, latitude], (status: string, result: any) => {
-            if (status === 'complete' && result.regeocode) {
-                const address = result.regeocode.formattedAddress;
-                form.setValue('address', address);
-                setUserAddress(address);
-
-                const newHistory = [
-                  address,
-                  ...addressHistory.filter((item) => item !== address),
-                ].slice(0, 5);
-                setAddressHistory(newHistory);
-                localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
-            } else {
-                console.error("Reverse geocoding failed:", result);
-                const fallbackAddress = '我的位置';
-                form.setValue('address', fallbackAddress);
-                setUserAddress(fallbackAddress);
-                toast({
-                    title: "定位成功",
-                    description: "已在地图上标记您的位置。",
-                });
-            }
-            // All operations are done, so stop loading
-            setIsLocating(false);
-        });
-      },
-      (error) => {
-        let message = '无法获取您的位置。';
-        if (error.code === error.PERMISSION_DENIED) {
-          message = '您已拒绝位置权限，请在浏览器设置中开启。';
+        // Reverse geocode to get address for display
+        if (geocoder) {
+            geocoder.getAddress([lng, lat], (status: string, geocodeResult: any) => {
+                if (status === 'complete' && geocodeResult.regeocode) {
+                    const address = geocodeResult.regeocode.formattedAddress;
+                    form.setValue('address', address);
+                    setUserAddress(address);
+                    const newHistory = [address, ...addressHistory.filter((item) => item !== address)].slice(0, 5);
+                    setAddressHistory(newHistory);
+                    localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
+                } else {
+                    const fallbackAddress = '我的位置';
+                    form.setValue('address', fallbackAddress);
+                    setUserAddress(fallbackAddress);
+                    toast({ title: "定位成功", description: "已在地图上标记您的位置。" });
+                }
+                setIsLocating(false);
+            });
+        } else {
+             const fallbackAddress = '我的位置';
+             form.setValue('address', fallbackAddress);
+             setUserAddress(fallbackAddress);
+             toast({ title: "定位成功", description: "已在地图上标记您的位置。" });
+             setIsLocating(false);
         }
-        toast({ variant: 'destructive', title: '定位失败', description: message });
+      } else {
+        toast({ variant: 'destructive', title: '定位失败', description: result.message || '无法获取您的位置信息。' });
         form.setValue('address', '');
         setIsLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+      }
+    });
   };
   
   const handleInputFocus = () => {

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, Search, MapPin, Phone, Store } from "lucide-react";
+import dynamic from 'next/dynamic';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,12 +14,19 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getNearestStations, getAddressSuggestions, getCoordinatesForAddress } from "@/app/actions";
-import { MapComponent } from "@/components/map-placeholder";
 import { StationInfoCard } from "@/components/station-info-card";
 import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
 
+
+const MapComponent = dynamic(
+  () => import('@/components/map-placeholder').then((mod) => mod.MapComponent),
+  { 
+    ssr: false,
+    loading: () => <div className="relative w-full aspect-square lg:aspect-auto lg:h-full min-h-[400px] rounded-xl overflow-hidden bg-muted border shadow-lg"><Skeleton className="absolute inset-0" /></div>
+  }
+);
 
 const formSchema = z.object({
   address: z.string().min(5, {

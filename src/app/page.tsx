@@ -266,9 +266,13 @@ export default function Home() {
     setIsPopoverOpen(false);
   };
   
-  const handleLocateMe = () => {
-    if (!geolocation) {
-      toast({ variant: 'destructive', title: '错误', description: '定位服务尚未准备好，请稍后再试。' });
+  const handleLocateMe = async () => {
+    if (!geolocation || !geocoder) {
+      toast({
+        variant: 'destructive',
+        title: '错误',
+        description: '定位服务尚未准备好，请稍后再试。',
+      });
       return;
     }
 
@@ -276,54 +280,78 @@ export default function Home() {
     setStations([]);
     setSelectedStationIndex(null);
     setUserCoordinates(null);
-    form.setValue("address", "正在定位...");
+    form.setValue('address', '正在定位...');
+    setUserAddress('正在定位...');
 
-    geolocation.getCurrentPosition(async (status: string, result: any) => {
-      if (status === 'complete' && result.position) {
-        const { lat, lng } = result.position;
-        const coords = { latitude: lat, longitude: lng };
-        
-        setUserCoordinates(coords);
+    try {
+      const position = await new Promise((resolve, reject) => {
+        geolocation.getCurrentPosition((status: string, result: any) => {
+          if (status === 'complete' && result.position) {
+            resolve(result.position);
+          } else {
+            reject(new Error(result.message || '无法获取您的位置信息。'));
+          }
+        });
+      });
 
-        const stationResult = await getNearestStations(coords);
+      const { lat, lng } = position as any;
+      const coords = { latitude: lat, longitude: lng };
+      setUserCoordinates(coords);
 
-        if (stationResult.error) {
-            toast({ variant: 'destructive', title: '站点搜索失败', description: stationResult.error });
-        } else if (stationResult.data) {
-            setStations(stationResult.data.stations);
-        }
+      const stationsPromise = getNearestStations(coords);
+      const addressPromise = new Promise<string>((resolve) => {
+        geocoder.getAddress([lng, lat], (status: string, result: any) => {
+          if (status === 'complete' && result.regeocode) {
+            resolve(result.regeocode.formattedAddress);
+          } else {
+            resolve('我的位置');
+          }
+        });
+      });
 
-        // Reverse geocode to get address for display
-        if (geocoder) {
-            geocoder.getAddress([lng, lat], (status: string, geocodeResult: any) => {
-                if (status === 'complete' && geocodeResult.regeocode) {
-                    const address = geocodeResult.regeocode.formattedAddress;
-                    form.setValue('address', address);
-                    setUserAddress(address);
-                    const newHistory = [address, ...addressHistory.filter((item) => item !== address)].slice(0, 5);
-                    setAddressHistory(newHistory);
-                    localStorage.setItem('meituan_address_history', JSON.stringify(newHistory));
-                } else {
-                    const fallbackAddress = '我的位置';
-                    form.setValue('address', fallbackAddress);
-                    setUserAddress(fallbackAddress);
-                    toast({ title: "定位成功", description: "已在地图上标记您的位置。" });
-                }
-                setIsLocating(false);
-            });
-        } else {
-             const fallbackAddress = '我的位置';
-             form.setValue('address', fallbackAddress);
-             setUserAddress(fallbackAddress);
-             toast({ title: "定位成功", description: "已在地图上标记您的位置。" });
-             setIsLocating(false);
-        }
-      } else {
-        toast({ variant: 'destructive', title: '定位失败', description: result.message || '无法获取您的位置信息。' });
-        form.setValue('address', '');
-        setIsLocating(false);
+      const [stationResult, locatedAddress] = await Promise.all([
+        stationsPromise,
+        addressPromise,
+      ]);
+
+      if (stationResult.error) {
+        toast({
+          variant: 'destructive',
+          title: '站点搜索失败',
+          description: stationResult.error,
+        });
+      } else if (stationResult.data) {
+        setStations(stationResult.data.stations);
       }
-    });
+
+      form.setValue('address', locatedAddress);
+      setUserAddress(locatedAddress);
+
+      if (locatedAddress !== '我的位置') {
+        const newHistory = [
+          locatedAddress,
+          ...addressHistory.filter((item) => item !== locatedAddress),
+        ].slice(0, 5);
+        setAddressHistory(newHistory);
+        localStorage.setItem(
+          'meituan_address_history',
+          JSON.stringify(newHistory)
+        );
+      } else {
+         toast({ title: "定位成功", description: "已在地图上标记您的位置。" });
+      }
+
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '定位失败',
+        description: error.message,
+      });
+      form.setValue('address', '');
+      setUserAddress(null);
+    } finally {
+      setIsLocating(false);
+    }
   };
   
   const handleInputFocus = () => {

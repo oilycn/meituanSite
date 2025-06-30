@@ -164,7 +164,7 @@ export function MapComponent({
         map.current.setFitView(
           allMapElements,
           false,
-          [100, 450, 100, 100], // padding [B, R, T, L]
+          [100, 100, 100, 420], // padding [B, R, T, L]
           16
         );
       }
@@ -199,7 +199,7 @@ export function MapComponent({
                     routePolyline.current = polyline;
                     map.current.add(polyline);
                     
-                    map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, [80, 80, 80, 80], 16);
+                    map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, [80, 80, 80, 420], 16);
 
                     const distanceInKm = (route.distance / 1000).toFixed(2);
                     const timeInMinutes = Math.round(route.time / 60);
@@ -207,8 +207,6 @@ export function MapComponent({
                         distance: `${distanceInKm} 公里`,
                         time: `${timeInMinutes} 分钟`,
                     });
-                } else {
-                    console.error('获取驾车路线路径失败', result);
                 }
             } else {
                 console.error('获取驾车数据显示失败', result);

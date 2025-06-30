@@ -44,15 +44,21 @@ declare global {
   }
 }
 
+interface AddressSuggestion {
+  name: string;
+  district: string;
+}
+
 export default function Home() {
   const { toast } = useToast();
   const [stations, setStations] = useState<FindNearestStationsOutput['stations']>([]);
   const [userAddress, setUserAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
   const [selectedStationIndex, setSelectedStationIndex] = useState<number | null>(null);
   const [userCoordinates, setUserCoordinates] = useState<{latitude: number, longitude: number} | null>(null);
 
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [autoComplete, setAutoComplete] = useState<any>(null);
   const [geocoder, setGeocoder] = useState<any>(null);
@@ -149,7 +155,7 @@ export default function Home() {
 
   // Debounced effect for address suggestions
   useEffect(() => {
-    if (!addressValue || addressValue.length < 2 || isLoading) {
+    if (!addressValue || addressValue.length < 2) {
       setSuggestions([]);
       setIsPopoverOpen(false);
       return;
@@ -158,10 +164,18 @@ export default function Home() {
     const handler = setTimeout(() => {
       if (!autoComplete) return;
       autoComplete.search(addressValue, (status: string, result: any) => {
-        if (status === 'complete' && result.tips && result.tips.length > 0) {
-          const newSuggestions = result.tips.map((tip: any) => tip.name);
-          setSuggestions(newSuggestions);
-          setIsPopoverOpen(true);
+        if (status === 'complete' && result.tips) {
+            const validSuggestions = result.tips.filter((tip: any) => tip.name && tip.district);
+            if (validSuggestions.length > 0) {
+                setSuggestions(validSuggestions.map((tip: any) => ({
+                    name: tip.name,
+                    district: tip.district,
+                })));
+                setIsPopoverOpen(true);
+            } else {
+                setSuggestions([]);
+                setIsPopoverOpen(false);
+            }
         } else {
           setSuggestions([]);
           setIsPopoverOpen(false);
@@ -172,7 +186,7 @@ export default function Home() {
     return () => {
       clearTimeout(handler);
     };
-  }, [addressValue, autoComplete, isLoading]);
+  }, [addressValue, autoComplete]);
 
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -182,7 +196,7 @@ export default function Home() {
     }
 
     setIsPopoverOpen(false);
-    setIsLoading(true);
+    setIsSearching(true);
     setStations([]);
     setUserAddress(values.address);
     setSelectedStationIndex(null);
@@ -219,7 +233,7 @@ export default function Home() {
     } catch(err: any) {
        toast({ variant: "destructive", title: "地址解析失败", description: err.message });
     } finally {
-      setIsLoading(false);
+      setIsSearching(false);
     }
   }
 
@@ -227,12 +241,15 @@ export default function Home() {
     form.setValue("address", suggestion, { shouldValidate: true });
     setSuggestions([]);
     setIsPopoverOpen(false);
+    document.querySelector<HTMLInputElement>('input[name="address"]')?.focus();
   };
 
 
   const handleStationSelect = useCallback((index: number | null) => {
     setSelectedStationIndex(index);
   }, []);
+
+  const totalLoading = isLoading || isSearching;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -277,17 +294,22 @@ export default function Home() {
                                   </div>
                                 </FormControl>
                               </PopoverAnchor>
-                              <PopoverContent align="start" className="w-[var(--radix-popover-anchor-width)] p-0">
+                              <PopoverContent 
+                                align="start" 
+                                className="w-[var(--radix-popover-anchor-width)] p-0"
+                                onOpenAutoFocus={(e) => e.preventDefault()}
+                              >
                                 {suggestions.length > 0 && (
                                   <ul className="py-1">
                                     {suggestions.map((suggestion, index) => (
                                       <li
                                         key={index}
-                                        className="px-3 py-2 text-sm cursor-pointer hover:bg-accent rounded-md"
-                                        onClick={() => handleSuggestionClick(suggestion)}
+                                        className="px-3 py-2 cursor-pointer hover:bg-accent rounded-md"
+                                        onClick={() => handleSuggestionClick(suggestion.district + suggestion.name)}
                                         onMouseDown={(e) => e.preventDefault()}
                                       >
-                                        {suggestion}
+                                        <div className="text-sm font-medium">{suggestion.name}</div>
+                                        <div className="text-xs text-muted-foreground">{suggestion.district}</div>
                                       </li>
                                     ))}
                                   </ul>
@@ -298,8 +320,8 @@ export default function Home() {
                         </FormItem>
                       )}
                     />
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? (
+                    <Button type="submit" className="w-full" disabled={totalLoading}>
+                      {totalLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           正在搜索...
@@ -318,7 +340,7 @@ export default function Home() {
 
             <div className="space-y-4">
                 <h2 className="text-lg font-semibold tracking-tight">搜索结果</h2>
-                {isLoading && (
+                {totalLoading && (
                     <div className="space-y-4">
                         {[...Array(3)].map((_, i) => (
                             <Card key={i}>
@@ -337,7 +359,7 @@ export default function Home() {
                     </div>
                 )}
 
-                {!isLoading && stations.length > 0 && (
+                {!totalLoading && stations.length > 0 && (
                     <div className="space-y-4">
                         {stations.map((station, index) => (
                             <StationInfoCard
@@ -351,14 +373,14 @@ export default function Home() {
                     </div>
                 )}
 
-                {!isLoading && stations.length === 0 && (
+                {!totalLoading && stations.length === 0 && (
                      <Card className="flex flex-col items-center justify-center p-8 text-center border-dashed">
                         <CardContent className="p-0">
                             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
                                 <Store className="w-8 h-8 text-muted-foreground" />
                             </div>
                             <p className="text-muted-foreground">
-                                {userAddress ? "未找到站点。" : "您的搜索结果将显示在此处。"}
+                                {userAddress && !isLoading ? "未找到站点。" : "您的搜索结果将显示在此处。"}
                             </p>
                         </CardContent>
                     </Card>

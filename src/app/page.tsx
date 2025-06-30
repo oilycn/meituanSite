@@ -17,6 +17,7 @@ import { getNearestStations } from "@/app/actions";
 import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
+import { wuhanStations } from "@/lib/stations";
 
 
 const MapComponent = dynamic(
@@ -86,42 +87,6 @@ export default function Home() {
       console.error("Failed to load address history from localStorage", e);
     }
 
-    const loadInitialData = async (address: string) => {
-      setIsLoading(true);
-      setUserAddress(address);
-      form.setValue("address", address);
-
-      const geocodePromise = new Promise<{latitude: number, longitude: number} | null>((resolve) => {
-        const AMap = window.AMap;
-        const tempGeocoder = new AMap.Geocoder({ city: '全国' });
-        tempGeocoder.getLocation(address, (status: string, result: any) => {
-          if (status === 'complete' && result.geocodes.length) {
-            const { lat, lng } = result.geocodes[0].location;
-            resolve({ latitude: lat, longitude: lng });
-          } else {
-            console.error('Initial geocoding failed:', result);
-            resolve(null);
-          }
-        });
-      });
-      
-      const coords = await geocodePromise;
-
-      if (coords) {
-        setUserCoordinates(coords);
-        const result = await getNearestStations(coords);
-        if (result.error) {
-          toast({ variant: "destructive", title: "错误", description: result.error });
-        } else if (result.data) {
-          setStations(result.data.stations);
-        }
-      } else {
-        toast({ variant: "destructive", title: "错误", description: "无法解析默认地址的坐标。" });
-      }
-
-      setIsLoading(false);
-    };
-
     import('@amap/amap-jsapi-loader').then(({ default: AMapLoader }) => {
         if (process.env.NEXT_PUBLIC_AMAP_KEY && process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
             window._AMapSecurityConfig = {
@@ -136,9 +101,14 @@ export default function Home() {
         })
           .then((AMap) => {
             setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
-            const newGeocoder = new AMap.Geocoder({ city: '全国' });
-            setGeocoder(newGeocoder);
-            loadInitialData("武汉市常青花园十四小区");
+            setGeocoder(new AMap.Geocoder({ city: '全国' }));
+
+            const initialStations = wuhanStations.map(station => ({
+              ...station,
+              distance: 0,
+            }));
+            setStations(initialStations);
+            setIsLoading(false);
           })
           .catch((e) => {
             console.error("Failed to load AMap services:", e);
@@ -268,7 +238,7 @@ export default function Home() {
       });
       return;
     }
-
+  
     if (!geocoder) {
       toast({
         variant: 'destructive',
@@ -277,14 +247,10 @@ export default function Home() {
       });
       return;
     }
-
+  
     setIsLocating(true);
-    setStations([]);
-    setSelectedStationIndex(null);
-    setUserCoordinates(null);
     form.setValue('address', '正在定位...');
-    setUserAddress('正在定位...');
-
+  
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -293,27 +259,31 @@ export default function Home() {
           maximumAge: 0,
         });
       });
-
+  
       const { latitude, longitude } = position.coords;
       const coords = { latitude, longitude };
+  
+      // Reset states for new search
+      setStations([]);
+      setSelectedStationIndex(null);
       setUserCoordinates(coords);
-
+  
+      // Fetch stations and geocode address in parallel
       const stationsPromise = getNearestStations(coords);
       const addressPromise = new Promise<string>((resolve) => {
         geocoder.getAddress([longitude, latitude], (status: string, result: any) => {
           if (status === 'complete' && result.regeocode) {
             resolve(result.regeocode.formattedAddress);
           } else {
-            resolve('我的位置');
+            console.error('逆地理编码失败', result);
+            resolve('我的位置'); // Fallback address
           }
         });
       });
-
-      const [stationResult, locatedAddress] = await Promise.all([
-        stationsPromise,
-        addressPromise,
-      ]);
-
+  
+      const [stationResult, locatedAddress] = await Promise.all([stationsPromise, addressPromise]);
+  
+      // Update stations
       if (stationResult.error) {
         toast({
           variant: 'destructive',
@@ -323,10 +293,11 @@ export default function Home() {
       } else if (stationResult.data) {
         setStations(stationResult.data.stations);
       }
-
+  
+      // Update address and history
       form.setValue('address', locatedAddress);
       setUserAddress(locatedAddress);
-
+  
       if (locatedAddress !== '我的位置') {
         const newHistory = [
           locatedAddress,
@@ -484,7 +455,7 @@ export default function Home() {
                       )}
                     />
                     <Button type="submit" className="w-full" disabled={totalLoading}>
-                      {totalLoading ? (
+                      {isSearching || isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           正在搜索...

@@ -3,8 +3,6 @@
 import {
   findNearestStations,
   FindNearestStationsOutput,
-  geocodeAddress,
-  GeocodeAddressOutput,
 } from '@/ai/flows/find-nearest-stations';
 import {
   suggestAddresses,
@@ -42,20 +40,5 @@ export async function getAddressSuggestions(
     console.error(e);
     // Don't bother the user with an error, just return no suggestions.
     return { data: { suggestions: [] } };
-  }
-}
-
-export async function getCoordinatesForAddress(
-  address: string
-): Promise<{ data?: GeocodeAddressOutput; error?: string }> {
-  if (!address || address.trim() === '') {
-    return { error: '地址不能为空。' };
-  }
-  try {
-    const data = await geocodeAddress({ address });
-    return { data };
-  } catch (e) {
-    console.error(e);
-    return { error: '无法解析该地址的坐标。' };
   }
 }

@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getNearestStations, getAddressSuggestions, getCoordinatesForAddress } from "@/app/actions";
+import { getNearestStations, getAddressSuggestions } from "@/app/actions";
 import { StationInfoCard } from "@/components/station-info-card";
 import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
@@ -36,7 +36,7 @@ const formSchema = z.object({
 
 export default function Home() {
   const { toast } = useToast();
-  const [stations, setStations] = useState<FindNearestStationsOutput>([]);
+  const [stations, setStations] = useState<FindNearestStationsOutput['stations']>([]);
   const [userAddress, setUserAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedStationIndex, setSelectedStationIndex] = useState<number | null>(null);
@@ -61,21 +61,13 @@ export default function Home() {
       const defaultAddress = "上海市黄浦区人民广场";
       setUserAddress(defaultAddress);
 
-      const [stationsResult, coordsResult] = await Promise.all([
-        getNearestStations(defaultAddress),
-        getCoordinatesForAddress(defaultAddress)
-      ]);
+      const result = await getNearestStations(defaultAddress);
 
-      if (stationsResult.error) {
-        toast({ variant: "destructive", title: "错误", description: stationsResult.error });
-      } else if (stationsResult.data) {
-        setStations(stationsResult.data);
-      }
-      
-      if (coordsResult.error) {
-         toast({ variant: "destructive", title: "错误", description: coordsResult.error });
-      } else if (coordsResult.data) {
-        setUserCoordinates(coordsResult.data);
+      if (result.error) {
+        toast({ variant: "destructive", title: "错误", description: result.error });
+      } else if (result.data) {
+        setStations(result.data.stations);
+        setUserCoordinates(result.data.userCoordinates);
       }
       setIsLoading(false);
     };
@@ -98,29 +90,21 @@ export default function Home() {
     setSelectedStationIndex(null);
     setUserCoordinates(null);
 
-    const [stationsResult, coordsResult] = await Promise.all([
-        getNearestStations(values.address),
-        getCoordinatesForAddress(values.address)
-    ]);
+    const result = await getNearestStations(values.address);
 
     setIsLoading(false);
 
-    if (stationsResult.error) {
-      toast({ variant: "destructive", title: "错误", description: stationsResult.error });
-    } else if (stationsResult.data) {
-      setStations(stationsResult.data);
-      if (stationsResult.data.length === 0) {
+    if (result.error) {
+      toast({ variant: "destructive", title: "错误", description: result.error });
+    } else if (result.data) {
+      setStations(result.data.stations);
+      setUserCoordinates(result.data.userCoordinates);
+      if (result.data.stations.length === 0) {
         toast({
             title: "未找到站点",
             description: "我们未能找到该地址附近的任何站点。",
         });
       }
-    }
-
-    if (coordsResult.error) {
-       toast({ variant: "destructive", title: "错误", description: coordsResult.error });
-    } else if (coordsResult.data) {
-      setUserCoordinates(coordsResult.data);
     }
   }
 

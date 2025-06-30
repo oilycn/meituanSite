@@ -1,16 +1,12 @@
 'use server';
 
 /**
- * @fileOverview 
- * - A flow to find the three nearest Meituan stations from a given address.
- * - A flow to geocode an address into coordinates.
+ * @fileOverview
+ * - A flow to find the three nearest Meituan stations from a given address and geocode the address.
  *
- * - findNearestStations - A function that finds the three nearest Meituan stations.
+ * - findNearestStations - A function that finds the three nearest Meituan stations and returns coordinates for the address.
  * - FindNearestStationsInput - The input type for the findNearestStations function.
  * - FindNearestStationsOutput - The return type for the findNearestStations function.
- * - geocodeAddress - A function that converts an address to latitude and longitude.
- * - GeocodeAddressInput - The input type for the geocodeAddress function.
- * - GeocodeAddressOutput - The return type for the geocodeAddress function.
  */
 
 import {ai} from '@/ai/genkit';
@@ -31,7 +27,13 @@ const StationDetailsSchema = z.object({
   longitude: z.number().describe('The longitude of the station. e.g. 121.4737'),
 });
 
-const FindNearestStationsOutputSchema = z.array(StationDetailsSchema).length(3).describe('The three nearest Meituan stations.');
+const FindNearestStationsOutputSchema = z.object({
+    stations: z.array(StationDetailsSchema).length(3).describe('The three nearest Meituan stations.'),
+    userCoordinates: z.object({
+        latitude: z.number().describe("The latitude of the user's address."),
+        longitude: z.number().describe("The longitude of the user's address."),
+    }).describe("The geocoded coordinates of the user's input address."),
+});
 export type FindNearestStationsOutput = z.infer<typeof FindNearestStationsOutputSchema>;
 
 export async function findNearestStations(input: FindNearestStationsInput): Promise<FindNearestStationsOutput> {
@@ -44,11 +46,13 @@ const findNearestStationsPrompt = ai.definePrompt({
   output: {schema: FindNearestStationsOutputSchema},
   prompt: `你是一位专业的地理空间分析专家，擅长寻找附近的地点。
 
-  根据以下地址，找到最近的三个美团站点。请提供每个站点的名称、地址、电话号码以及精确的纬度和经度。
+  根据以下地址，找到最近的三个美团站点，并同时返回该地址的精确纬度和经度坐标。
 
   地址: {{{address}}}
 
-  请以 JSON 数组的格式返回三个最近的美团站点。
+  请以一个 JSON 对象的格式返回结果。该对象应包含两个键：
+  1. "stations": 一个包含三个美团站点信息的 JSON 数组。每个站点对象应包含名称(name)、地址(address)、电话号码(phoneNumber)、纬度(latitude)和经度(longitude)。
+  2. "userCoordinates": 一个包含输入地址坐标的 JSON 对象，包含纬度(latitude)和经度(longitude)键。
   `,
 });
 
@@ -60,48 +64,6 @@ const findNearestStationsFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await findNearestStationsPrompt(input);
-    return output!;
-  }
-);
-
-
-// === Geocode Address Flow ===
-
-const GeocodeAddressInputSchema = z.object({
-  address: z.string().describe('The address to geocode.'),
-});
-export type GeocodeAddressInput = z.infer<typeof GeocodeAddressInputSchema>;
-
-const GeocodeAddressOutputSchema = z.object({
-    latitude: z.number().describe('The latitude of the address.'),
-    longitude: z.number().describe('The longitude of the address.'),
-});
-export type GeocodeAddressOutput = z.infer<typeof GeocodeAddressOutputSchema>;
-
-export async function geocodeAddress(input: GeocodeAddressInput): Promise<GeocodeAddressOutput> {
-  return geocodeAddressFlow(input);
-}
-
-const geocodeAddressPrompt = ai.definePrompt({
-  name: 'geocodeAddressPrompt',
-  input: {schema: GeocodeAddressInputSchema},
-  output: {schema: GeocodeAddressOutputSchema},
-  prompt: `You are a geocoding expert. Convert the following address into precise latitude and longitude coordinates.
-
-  Address: {{{address}}}
-
-  Return the result as a JSON object with "latitude" and "longitude" keys.
-  `,
-});
-
-const geocodeAddressFlow = ai.defineFlow(
-  {
-    name: 'geocodeAddressFlow',
-    inputSchema: GeocodeAddressInputSchema,
-    outputSchema: GeocodeAddressOutputSchema,
-  },
-  async input => {
-    const {output} = await geocodeAddressPrompt(input);
     return output!;
   }
 );

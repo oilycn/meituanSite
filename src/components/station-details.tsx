@@ -35,9 +35,21 @@ export function StationDetails({ stations, selectedStationIndex, onStationSelect
         <CardTitle>附近站点列表</CardTitle>
         <CardDescription>共找到 {stations.length} 个站点，按距离排序。</CardDescription>
       </CardHeader>
+      
+      <div className="px-6 pb-4 border-b">
+        <Tabs value={travelMode} onValueChange={(value) => onTravelModeChange(value as any)} className="w-full">
+            <TabsList className="grid w-full grid-cols-4 h-auto">
+                <TabsTrigger value="driving" className="flex-col gap-1 py-2 h-auto"><Car className="w-5 h-5"/>驾车</TabsTrigger>
+                <TabsTrigger value="walking" className="flex-col gap-1 py-2 h-auto"><Footprints className="w-5 h-5"/>步行</TabsTrigger>
+                <TabsTrigger value="biking" className="flex-col gap-1 py-2 h-auto"><Bike className="w-5 h-5"/>骑行</TabsTrigger>
+                <TabsTrigger value="transit" className="flex-col gap-1 py-2 h-auto"><Bus className="w-5 h-5"/>公交</TabsTrigger>
+            </TabsList>
+        </Tabs>
+      </div>
+
       <CardContent className="p-0 flex-grow overflow-hidden">
         <ScrollArea className="h-full">
-          <div className="space-y-1 p-4 pt-0">
+          <div className="space-y-1 p-4">
             {stations.map((station, index) => (
               <div
                 key={index}
@@ -70,14 +82,6 @@ export function StationDetails({ stations, selectedStationIndex, onStationSelect
                 
                 {selectedStationIndex === index && (
                     <div className="mt-3 space-y-3">
-                         <Tabs value={travelMode} onValueChange={(value) => onTravelModeChange(value as any)} className="w-full">
-                            <TabsList className="grid w-full grid-cols-4 h-auto">
-                                <TabsTrigger value="driving" className="flex-col gap-1 py-2 h-auto"><Car className="w-5 h-5"/>驾车</TabsTrigger>
-                                <TabsTrigger value="walking" className="flex-col gap-1 py-2 h-auto"><Footprints className="w-5 h-5"/>步行</TabsTrigger>
-                                <TabsTrigger value="biking" className="flex-col gap-1 py-2 h-auto"><Bike className="w-5 h-5"/>骑行</TabsTrigger>
-                                <TabsTrigger value="transit" className="flex-col gap-1 py-2 h-auto"><Bus className="w-5 h-5"/>公交</TabsTrigger>
-                            </TabsList>
-                        </Tabs>
                         {routeDetails ? (
                             <div className="p-3 bg-accent/20 rounded-md border border-accent/50">
                                 <div className="flex items-center justify-between gap-4 text-sm font-medium">

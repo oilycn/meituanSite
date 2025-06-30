@@ -83,67 +83,91 @@ export function MapComponent({
 
   useEffect(() => {
     if (isMapLoaded) {
-        const AMap = window.AMap;
-        // Clear previous markers
-        map.current.remove(markers.current);
-        markers.current = [];
-        if(userMarker.current) {
-            map.current.remove(userMarker.current);
-            userMarker.current = null;
-        }
+      const AMap = window.AMap;
+      // Clear previous markers
+      map.current.remove(markers.current);
+      markers.current = [];
+      if (userMarker.current) {
+        map.current.remove(userMarker.current);
+        userMarker.current = null;
+      }
 
-        // Add user marker
-        if (userCoordinates) {
-            const userIcon = new AMap.Icon({
-                size: new AMap.Size(40, 40),
-                image: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="hsl(var(--destructive))" stroke="white" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>'),
-                imageSize: new AMap.Size(40, 40),
-            });
-            userMarker.current = new AMap.Marker({
-                position: [userCoordinates.longitude, userCoordinates.latitude],
-                map: map.current,
-                icon: userIcon,
-                anchor: 'bottom-center',
-                title: userAddress || '',
-            });
-            map.current.setCenter([userCoordinates.longitude, userCoordinates.latitude]);
-            map.current.setZoom(14);
-        }
+      const allMapElements: any[] = [];
 
-        // Add station markers
-        stations.forEach((station, index) => {
-            const isSelected = selectedStationIndex === index;
-            const markerContent = `
-                <div style="position: relative; text-align: center; color: white; font-weight: bold; font-size: 14px; width: 32px; height: 32px;
-                            background-color: ${isSelected ? 'hsl(var(--accent))' : 'hsl(var(--primary))'};
-                            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-                            border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                            transform: ${isSelected ? 'scale(1.2)' : 'scale(1)'}; transition: transform 0.2s ease; cursor: pointer;">
-                    ${index + 1}
-                </div>
-            `;
-
-            const marker = new AMap.Marker({
-                position: [station.longitude, station.latitude],
-                map: map.current,
-                content: markerContent,
-                anchor: 'center',
-                title: station.name,
-            });
-            
-            marker.on('click', () => {
-                onStationSelect(index === selectedStationIndex ? null : index);
-            });
-
-            markers.current.push(marker);
+      // Add user marker
+      if (userCoordinates) {
+        const userIcon = new AMap.Icon({
+          size: new AMap.Size(40, 40),
+          image:
+            'data:image/svg+xml;charset=utf-8,' +
+            encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="hsl(var(--destructive))" stroke="white" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>'
+            ),
+          imageSize: new AMap.Size(40, 40),
         });
-        
-        if (stations.length > 0 && !userCoordinates) {
-             map.current.setFitView(undefined, false, [60, 60, 60, 60]);
-        }
+        userMarker.current = new AMap.Marker({
+          position: [userCoordinates.longitude, userCoordinates.latitude],
+          map: map.current,
+          icon: userIcon,
+          anchor: 'bottom-center',
+          title: userAddress || '',
+        });
+        allMapElements.push(userMarker.current);
+      }
 
+      // Add station markers
+      stations.forEach((station, index) => {
+        const isSelected = selectedStationIndex === index;
+        const markerContent = `
+            <div style="position: relative; text-align: center; color: white; font-weight: bold; font-size: 14px; width: 32px; height: 32px;
+                        background-color: ${
+                          isSelected
+                            ? 'hsl(var(--accent))'
+                            : 'hsl(var(--primary))'
+                        };
+                        border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                        border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                        transform: ${
+                          isSelected ? 'scale(1.2)' : 'scale(1)'
+                        }; transition: transform 0.2s ease; cursor: pointer;">
+                ${index + 1}
+            </div>
+        `;
+
+        const marker = new AMap.Marker({
+          position: [station.longitude, station.latitude],
+          map: map.current,
+          content: markerContent,
+          anchor: 'center',
+          title: station.name,
+        });
+
+        marker.on('click', () => {
+          onStationSelect(index === selectedStationIndex ? null : index);
+        });
+
+        markers.current.push(marker);
+        allMapElements.push(marker);
+      });
+
+      // Set map view to fit all markers
+      if (allMapElements.length > 0) {
+        map.current.setFitView(
+          allMapElements,
+          false, // animate
+          [100, 100, 100, 100], // padding [B, R, T, L]
+          16 // maxZoom
+        );
+      }
     }
-  }, [stations, userCoordinates, userAddress, isMapLoaded, selectedStationIndex, onStationSelect]);
+  }, [
+    stations,
+    userCoordinates,
+    userAddress,
+    isMapLoaded,
+    selectedStationIndex,
+    onStationSelect,
+  ]);
 
   useEffect(() => {
     if (isMapLoaded && selectedStationIndex !== null && stations[selectedStationIndex]) {

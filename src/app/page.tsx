@@ -24,7 +24,7 @@ const MapComponent = dynamic(
   () => import('@/components/map-placeholder').then((mod) => mod.MapComponent),
   { 
     ssr: false,
-    loading: () => <div className="relative w-full aspect-square lg:aspect-auto lg:h-full min-h-[400px] rounded-xl overflow-hidden bg-muted border shadow-lg"><Skeleton className="absolute inset-0" /></div>
+    loading: () => <div className="relative w-full h-full min-h-[400px] rounded-xl overflow-hidden bg-muted border shadow-lg"><Skeleton className="absolute inset-0" /></div>
   }
 );
 
@@ -175,8 +175,8 @@ export default function Home() {
       </header>
 
       <main className="flex-1 container py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          <div className="lg:col-span-1 flex flex-col gap-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="w-full lg:w-[400px] xl:w-[450px] flex-shrink-0 flex flex-col gap-8">
             <Card className="w-full shadow-lg">
               <CardHeader>
                 <CardTitle>查找附近站点</CardTitle>
@@ -297,7 +297,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="lg:col-span-2 sticky top-24">
+          <div className="flex-1 h-[50vh] lg:h-[calc(100vh-8rem)] lg:sticky top-24">
             <MapComponent
               stations={stations}
               userCoordinates={userCoordinates}

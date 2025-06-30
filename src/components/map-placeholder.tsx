@@ -155,7 +155,7 @@ export function MapComponent({
         map.current.setFitView(
           allMapElements,
           false, // animate
-          [100, 100, 100, 100], // padding [B, R, T, L]
+          [80, 80, 80, 80], // padding [B, R, T, L]
           16 // maxZoom
         );
       }
@@ -180,7 +180,7 @@ export function MapComponent({
 
   if (!process.env.NEXT_PUBLIC_AMAP_KEY || !process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
       return (
-          <div className="relative w-full aspect-square lg:aspect-auto lg:h-full min-h-[400px] rounded-xl overflow-hidden bg-muted border shadow-lg flex items-center justify-center text-center text-muted-foreground p-4">
+          <div className="relative w-full h-full rounded-xl overflow-hidden bg-muted border shadow-lg flex items-center justify-center text-center text-muted-foreground p-4">
               <div>
                   <MapPin className="mx-auto h-12 w-12" />
                   <p className="mt-4 font-medium">高德地图API密钥未配置</p>
@@ -192,7 +192,7 @@ export function MapComponent({
   
   if (loadError) {
     return (
-      <div className="relative w-full aspect-square lg:aspect-auto lg:h-full min-h-[400px] rounded-xl overflow-hidden bg-destructive/10 border border-destructive/50 shadow-lg flex items-center justify-center text-center text-destructive p-4">
+      <div className="relative w-full h-full rounded-xl overflow-hidden bg-destructive/10 border border-destructive/50 shadow-lg flex items-center justify-center text-center text-destructive p-4">
           <div>
               <AlertTriangle className="mx-auto h-12 w-12" />
               <p className="mt-4 font-medium">地图加载错误</p>
@@ -203,7 +203,7 @@ export function MapComponent({
   }
 
   return (
-    <div className="relative w-full aspect-square lg:aspect-auto lg:h-full min-h-[400px] rounded-xl overflow-hidden bg-muted border shadow-lg">
+    <div className="relative w-full h-full rounded-xl overflow-hidden bg-muted border shadow-lg">
       <div ref={mapContainer} className="w-full h-full" />
       {!isMapLoaded && <Skeleton className="absolute inset-0" />}
     </div>

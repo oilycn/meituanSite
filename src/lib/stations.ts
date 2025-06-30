@@ -9,7 +9,7 @@ export interface Station {
 export const wuhanStations: Station[] = [
   {
     name: '西藏踢踢【武汉】轻工大学站',
-    address: '湖北省武汉市东西湖区公园南路常青花园14区', 
+    address: '湖北省武汉市东西湖区公园南路常青花园14区',
     phoneNumber: '未知',
     latitude: 30.635848,
     longitude: 114.238491,
@@ -18,15 +18,15 @@ export const wuhanStations: Station[] = [
     name: '西藏踢踢【武汉】武广国际站',
     address: '湖北省武汉市江汉区前进街街道京汉大道514号(友谊路地铁站B口步行470米)',
     phoneNumber: '未知',
-    latitude: 30.608678,
-    longitude: 114.264426,
+    latitude: 30.608300,
+    longitude: 114.264700,
   },
   {
     name: '西藏踢踢【武汉】汉口火车站',
-    address: '江汉区金墩街',
+    address: '湖北省武汉市江汉区发展大道185号',
     phoneNumber: '未知',
-    latitude: 30.589839,
-    longitude: 114.270404,
+    latitude: 30.60942,
+    longitude: 114.27231,
   },
   {
     name: '西藏踢踢【武汉】创业街站',
@@ -65,10 +65,10 @@ export const wuhanStations: Station[] = [
   },
   {
     name: '西藏踢踢【武汉】中南路站',
-    address: '武昌区梅苑路',
+    address: '武昌区傅家坡梅苑小区一期(梅苑路东50米)',
     phoneNumber: '未知',
-    latitude: 30.556000,
-    longitude: 114.335000,
+    latitude: 30.548800,
+    longitude: 114.333800,
   },
   {
     name: '西藏踢踢【武汉】花山站',
@@ -79,10 +79,10 @@ export const wuhanStations: Station[] = [
   },
   {
     name: '西藏踢踢【武汉】长港路站',
-    address: '湖北省武汉市江汉区长港路地铁站附近',
+    address: '江汉区常青五路60号',
     phoneNumber: '未知',
-    latitude: 30.6405,
-    longitude: 114.2530,
+    latitude: 30.635800,
+    longitude: 114.225500,
   },
   {
     name: '西藏踢踢【武汉】佛祖岭站',
@@ -102,21 +102,7 @@ export const wuhanStations: Station[] = [
     name: '西藏踢踢【武汉】红钢城站',
     address: '湖北省武汉市青山区冶金街道鄂州街9号',
     phoneNumber: '未知',
-    latitude: 30.6369,
-    longitude: 114.3854,
+    latitude: 30.618000,
+    longitude: 114.398000,
   },
-  // {
-  //   name: '西藏踢踢【武汉】县华林站V', // 假设是昙华林站的另一种表达，但地址已分配
-  //   address: '无可用唯一地址',
-  //   phoneNumber: '未知',
-  //   latitude: null,
-  //   longitude: null,
-  // },
-  // {
-  //   name: '西藏踢踢【武汉】中南路站。', // 假设是中南路站的另一种表达，但地址已分配
-  //   address: '无可用唯一地址',
-  //   phoneNumber: '未知',
-  //   latitude: null,
-  //   longitude: null,
-  // },
 ];

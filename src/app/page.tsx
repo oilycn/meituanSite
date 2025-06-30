@@ -65,6 +65,8 @@ export default function Home() {
     },
   });
 
+  const addressValue = form.watch("address");
+
   useEffect(() => {
     const loadDefaultStations = async () => {
       setIsLoading(true);
@@ -111,6 +113,39 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Debounced effect for address suggestions
+  useEffect(() => {
+    // If address is too short, clear suggestions and do nothing
+    if (!addressValue || addressValue.length < 2) {
+      setSuggestions([]);
+      setIsPopoverOpen(false);
+      return;
+    }
+
+    const handler = setTimeout(() => {
+      // Don't search if autoComplete is not ready
+      if (!autoComplete) return;
+
+      setIsSuggesting(true); // Start spinner right before the search
+      autoComplete.search(addressValue, (status: string, result: any) => {
+        setIsSuggesting(false); // Stop spinner when search is done
+        if (status === 'complete' && result.tips && result.tips.length > 0) {
+          const newSuggestions = result.tips.map((tip: any) => tip.name);
+          setSuggestions(newSuggestions);
+          setIsPopoverOpen(true);
+        } else {
+          setSuggestions([]);
+          setIsPopoverOpen(false);
+        }
+      });
+    }, 500); // 500ms debounce delay
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [addressValue, autoComplete]);
+
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsPopoverOpen(false);
     setIsLoading(true);
@@ -136,29 +171,6 @@ export default function Home() {
       }
     }
   }
-
-  const handleAddressChange = (value: string) => {
-    form.setValue("address", value);
-    
-    if (!autoComplete || value.length < 2) {
-      setSuggestions([]);
-      setIsPopoverOpen(false);
-      return;
-    }
-
-    setIsSuggesting(true);
-    autoComplete.search(value, (status: string, result: any) => {
-      setIsSuggesting(false);
-      if (status === 'complete' && result.tips && result.tips.length > 0) {
-        const newSuggestions = result.tips.map((tip: any) => tip.name);
-        setSuggestions(newSuggestions);
-        setIsPopoverOpen(true);
-      } else {
-        setSuggestions([]);
-        setIsPopoverOpen(false);
-      }
-    });
-  };
 
   const handleSuggestionClick = (suggestion: string) => {
     form.setValue("address", suggestion, { shouldValidate: true });
@@ -210,10 +222,6 @@ export default function Home() {
                                     <Input
                                       placeholder="例如：北京市海淀区中关村"
                                       {...field}
-                                      onChange={(e) => {
-                                        field.onChange(e);
-                                        handleAddressChange(e.target.value);
-                                      }}
                                       autoComplete="off"
                                       className="pl-10" />
                                     {isSuggesting && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin" />}

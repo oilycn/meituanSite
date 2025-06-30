@@ -29,7 +29,7 @@ const MapComponent = dynamic(
 );
 
 const formSchema = z.object({
-  address: z.string().min(5, {
+  address: z.string().min(2, {
     message: "请输入更详细的地址。",
   }),
 });
@@ -138,7 +138,7 @@ export default function Home() {
           .then((AMap) => {
             setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
             setGeocoder(new AMap.Geocoder({ city: '全国' }));
-            loadInitialData("上海市黄浦区人民广场");
+            loadInitialData("武汉市常青花园十四小区");
           })
           .catch((e) => {
             console.error("Failed to load AMap AutoComplete:", e);
@@ -287,7 +287,7 @@ export default function Home() {
                                   <div className="relative">
                                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                                     <Input
-                                      placeholder="例如：北京市海淀区中关村"
+                                      placeholder="例如：武汉市常青花园十四小区"
                                       {...field}
                                       autoComplete="off"
                                       className="pl-10" />

@@ -2,7 +2,7 @@
 
 /**
  * @fileOverview
- * - A flow to find the three nearest Meituan stations from a given set of coordinates.
+ * - A flow to find the three nearest Meituan stations from a given set of coordinates from a predefined list.
  *
  * - findNearestStations - A function that finds the three nearest Meituan stations.
  * - FindNearestStationsInput - The input type for the findNearestStations function.
@@ -11,9 +11,9 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { wuhanStations } from '@/lib/stations';
 
-// === Find Nearest Stations Flow ===
-
+// === Schemas (remain the same) ===
 const FindNearestStationsInputSchema = z.object({
   latitude: z.number().describe("The latitude of the user's location."),
   longitude: z.number().describe("The longitude of the user's location."),
@@ -29,36 +29,56 @@ const StationDetailsSchema = z.object({
 });
 
 const FindNearestStationsOutputSchema = z.object({
-    stations: z.array(StationDetailsSchema).length(3).describe('The three nearest Meituan stations.'),
+    stations: z.array(StationDetailsSchema).max(3).describe('The three nearest Meituan stations.'),
 });
 export type FindNearestStationsOutput = z.infer<typeof FindNearestStationsOutputSchema>;
 
+
+// === Haversine distance calculation ===
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d;
+}
+
+function deg2rad(deg: number) {
+  return deg * (Math.PI / 180);
+}
+
+
+// === Exported function ===
 export async function findNearestStations(input: FindNearestStationsInput): Promise<FindNearestStationsOutput> {
   return findNearestStationsFlow(input);
 }
 
-const findNearestStationsPrompt = ai.definePrompt({
-  name: 'findNearestStationsPrompt',
-  input: {schema: FindNearestStationsInputSchema},
-  output: {schema: FindNearestStationsOutputSchema},
-  prompt: `你是一位专业的地理空间分析专家，擅长寻找附近的地点。
 
-  根据以下坐标，找到最近的三个美团站点。
-
-  坐标: 纬度 {{{latitude}}}, 经度 {{{longitude}}}
-
-  请以一个 JSON 对象的格式返回结果。该对象应包含一个键 "stations"，其值为一个包含三个美团站点信息的 JSON 数组。每个站点对象应包含名称(name)、地址(address)、电话号码(phoneNumber)、纬度(latitude)和经度(longitude)。
-  `,
-});
-
+// === The Flow ===
+// No longer uses an AI prompt. It calculates the nearest stations from a static list.
 const findNearestStationsFlow = ai.defineFlow(
   {
     name: 'findNearestStationsFlow',
     inputSchema: FindNearestStationsInputSchema,
     outputSchema: FindNearestStationsOutputSchema,
   },
-  async input => {
-    const {output} = await findNearestStationsPrompt(input);
-    return output!;
+  async ({ latitude, longitude }) => {
+    const stationsWithDistance = wuhanStations.map(station => ({
+      ...station,
+      distance: getDistance(latitude, longitude, station.latitude, station.longitude),
+    }));
+
+    stationsWithDistance.sort((a, b) => a.distance - b.distance);
+
+    const nearestStations = stationsWithDistance.slice(0, 3).map(({ distance, ...station }) => station);
+
+    return {
+      stations: nearestStations,
+    };
   }
 );

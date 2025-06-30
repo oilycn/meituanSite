@@ -65,7 +65,6 @@ export default function Home() {
   
   const [autoComplete, setAutoComplete] = useState<any>(null);
   const [geocoder, setGeocoder] = useState<any>(null);
-  const [geolocation, setGeolocation] = useState<any>(null);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -133,18 +132,12 @@ export default function Home() {
         AMapLoader.load({
           key: process.env.NEXT_PUBLIC_AMAP_KEY || "",
           version: "2.0",
-          plugins: ['AMap.AutoComplete', 'AMap.Geocoder', 'AMap.Geolocation'],
+          plugins: ['AMap.AutoComplete', 'AMap.Geocoder'],
         })
           .then((AMap) => {
             setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
             const newGeocoder = new AMap.Geocoder({ city: '全国' });
             setGeocoder(newGeocoder);
-            const newGeolocation = new AMap.Geolocation({
-              enableHighAccuracy: true,
-              timeout: 10000,
-              maximumAge: 0,
-            });
-            setGeolocation(newGeolocation);
             loadInitialData("武汉市常青花园十四小区");
           })
           .catch((e) => {
@@ -267,11 +260,20 @@ export default function Home() {
   };
   
   const handleLocateMe = async () => {
-    if (!geolocation || !geocoder) {
+    if (!navigator.geolocation) {
+      toast({
+        variant: 'destructive',
+        title: '定位失败',
+        description: '您的浏览器不支持定位功能。',
+      });
+      return;
+    }
+
+    if (!geocoder) {
       toast({
         variant: 'destructive',
         title: '错误',
-        description: '定位服务尚未准备好，请稍后再试。',
+        description: '地理编码服务尚未准备好，请稍后再试。',
       });
       return;
     }
@@ -284,23 +286,21 @@ export default function Home() {
     setUserAddress('正在定位...');
 
     try {
-      const position = await new Promise((resolve, reject) => {
-        geolocation.getCurrentPosition((status: string, result: any) => {
-          if (status === 'complete' && result.position) {
-            resolve(result.position);
-          } else {
-            reject(new Error(result.message || '无法获取您的位置信息。'));
-          }
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
         });
       });
 
-      const { lat, lng } = position as any;
-      const coords = { latitude: lat, longitude: lng };
+      const { latitude, longitude } = position.coords;
+      const coords = { latitude, longitude };
       setUserCoordinates(coords);
 
       const stationsPromise = getNearestStations(coords);
       const addressPromise = new Promise<string>((resolve) => {
-        geocoder.getAddress([lng, lat], (status: string, result: any) => {
+        geocoder.getAddress([longitude, latitude], (status: string, result: any) => {
           if (status === 'complete' && result.regeocode) {
             resolve(result.regeocode.formattedAddress);
           } else {
@@ -338,14 +338,22 @@ export default function Home() {
           JSON.stringify(newHistory)
         );
       } else {
-         toast({ title: "定位成功", description: "已在地图上标记您的位置。" });
+        toast({ title: '定位成功', description: '已在地图上标记您的位置。' });
       }
-
     } catch (error: any) {
+      let errorMessage = '无法获取您的位置信息。';
+      if (error.code === 1) { // PERMISSION_DENIED
+        errorMessage = '定位失败：用户已拒绝共享位置信息。';
+      } else if (error.code === 2) { // POSITION_UNAVAILABLE
+        errorMessage = '定位失败：无法确定设备位置。';
+      } else if (error.code === 3) { // TIMEOUT
+        errorMessage = '定位失败：请求超时。';
+      }
+      
       toast({
         variant: 'destructive',
         title: '定位失败',
-        description: error.message,
+        description: error.message || errorMessage,
       });
       form.setValue('address', '');
       setUserAddress(null);

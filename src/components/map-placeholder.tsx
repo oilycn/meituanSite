@@ -12,6 +12,7 @@ interface MapComponentProps {
   onStationSelect: (index: number | null) => void;
   userAddress: string | null;
   onRoutePlanned: (details: { distance: string; time: string } | null) => void;
+  travelMode: 'driving' | 'walking' | 'biking' | 'transit';
 }
 
 // Extend Window interface for AMap
@@ -30,7 +31,8 @@ export function MapComponent({
   selectedStationIndex,
   onStationSelect,
   userAddress,
-  onRoutePlanned
+  onRoutePlanned,
+  travelMode,
 }: MapComponentProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
@@ -39,8 +41,12 @@ export function MapComponent({
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isApiLoaded, setIsApiLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  
   const [driving, setDriving] = useState<any>(null);
-  const routePolyline = useRef<any>(null);
+  const [walking, setWalking] = useState<any>(null);
+  const [riding, setRiding] = useState<any>(null);
+  const [transfer, setTransfer] = useState<any>(null);
+
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_AMAP_KEY && process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
@@ -53,7 +59,7 @@ export function MapComponent({
         AMapLoader.load({
         key: process.env.NEXT_PUBLIC_AMAP_KEY || "",
         version: "2.0",
-        plugins: ['AMap.Marker', 'AMap.Icon', 'AMap.Pixel', 'AMap.Driving'],
+        plugins: ['AMap.Marker', 'AMap.Icon', 'AMap.Pixel', 'AMap.Driving', 'AMap.Walking', 'AMap.Riding', 'AMap.Transfer'],
         })
         .then((AMap) => {
             setIsApiLoaded(true);
@@ -75,10 +81,10 @@ export function MapComponent({
             mapStyle: 'amap://styles/whitesmoke',
         });
 
-        setDriving(new AMap.Driving({
-            map: map.current,
-            policy: AMap.DrivingPolicy.LEAST_TIME,
-        }));
+        setDriving(new AMap.Driving({ map: map.current, policy: AMap.DrivingPolicy.LEAST_TIME }));
+        setWalking(new AMap.Walking({ map: map.current }));
+        setRiding(new AMap.Riding({ map: map.current }));
+        setTransfer(new AMap.Transfer({ map: map.current, policy: AMap.TransferPolicy.LEAST_TIME, city: '武汉市' }));
         
         map.current.on('complete', () => {
              setIsMapLoaded(true);
@@ -164,7 +170,7 @@ export function MapComponent({
         map.current.setFitView(
           allMapElements,
           false,
-          [100, 100, 100, 420], // padding [B, R, T, L]
+          [100, 100, 100, 420],
           16
         );
       }
@@ -172,48 +178,64 @@ export function MapComponent({
   }, [stations, userCoordinates, userAddress, isMapLoaded, selectedStationIndex, onStationSelect]);
 
   useEffect(() => {
-    if (routePolyline.current) {
-        map.current.remove(routePolyline.current);
-        routePolyline.current = null;
-    }
+    driving?.clear();
+    walking?.clear();
+    riding?.clear();
+    transfer?.clear();
     onRoutePlanned(null);
 
-    if (isMapLoaded && driving && selectedStationIndex !== null && userCoordinates && stations[selectedStationIndex]) {
+    if (isMapLoaded && selectedStationIndex !== null && userCoordinates && stations[selectedStationIndex]) {
         const startLngLat = [userCoordinates.longitude, userCoordinates.latitude];
         const endLngLat = [stations[selectedStationIndex].longitude, stations[selectedStationIndex].latitude];
 
-        driving.search(startLngLat, endLngLat, (status: string, result: any) => {
-            if (status === 'complete' && result.routes && result.routes.length) {
-                const route = result.routes[0];
-                
-                if (route && route.path) {
-                    const path = route.path.map((p: any) => [p.lng, p.lat]);
-                    const polyline = new window.AMap.Polyline({
-                        path: path,
-                        borderWeight: 2,
-                        strokeColor: 'hsl(var(--primary))',
-                        strokeOpacity: 0.9,
-                        strokeWeight: 6,
-                        strokeStyle: 'solid',
-                    });
-                    routePolyline.current = polyline;
-                    map.current.add(polyline);
-                    
+        const onSearchResult = (status: string, result: any) => {
+            if (status === 'complete') {
+                if ((result.routes && result.routes.length > 0) || (result.plans && result.plans.length > 0)) {
                     map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, [80, 80, 80, 420], 16);
 
-                    const distanceInKm = (route.distance / 1000).toFixed(2);
-                    const timeInMinutes = Math.round(route.time / 60);
+                    let distance = 0;
+                    let time = 0;
+
+                    if (result.routes && result.routes.length > 0) { // Driving, Walking, Biking
+                        distance = result.routes[0].distance;
+                        time = result.routes[0].time;
+                    } else if (result.plans && result.plans.length > 0) { // Transit
+                        distance = result.plans[0].distance;
+                        time = result.plans[0].time;
+                    }
+
+                    const distanceInKm = (distance / 1000).toFixed(2);
+                    const timeInMinutes = Math.round(time / 60);
                     onRoutePlanned({
                         distance: `${distanceInKm} 公里`,
                         time: `${timeInMinutes} 分钟`,
                     });
+                } else {
+                    console.error(`获取${travelMode}路线失败，结果为空`, result);
+                    onRoutePlanned({ distance: '无法规划', time: '路线' });
                 }
             } else {
-                console.error('获取驾车数据显示失败', result);
+                console.error(`获取${travelMode}数据显示失败`, result);
+                onRoutePlanned({ distance: '无法规划', time: '路线' });
             }
-        });
+        };
+
+        switch (travelMode) {
+            case 'driving':
+                if (driving) driving.search(startLngLat, endLngLat, onSearchResult);
+                break;
+            case 'walking':
+                if (walking) walking.search(startLngLat, endLngLat, onSearchResult);
+                break;
+            case 'biking':
+                if (riding) riding.search(startLngLat, endLngLat, onSearchResult);
+                break;
+            case 'transit':
+                if (transfer) transfer.search(startLngLat, endLngLat, onSearchResult);
+                break;
+        }
     }
-  }, [selectedStationIndex, userCoordinates, driving, isMapLoaded, onRoutePlanned, stations]);
+  }, [selectedStationIndex, userCoordinates, travelMode, stations, onRoutePlanned, isMapLoaded, driving, walking, riding, transfer]);
 
   if (!process.env.NEXT_PUBLIC_AMAP_KEY || !process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
       return (

@@ -70,6 +70,7 @@ export default function Home() {
 
   const [viewMode, setViewMode] = useState<'search' | 'results'>('search');
   const [routeDetails, setRouteDetails] = useState<{ distance: string; time: string; } | null>(null);
+  const [travelMode, setTravelMode] = useState<'driving' | 'walking' | 'biking' | 'transit'>('driving');
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -332,6 +333,10 @@ export default function Home() {
     }
   }, []);
 
+  const handleTravelModeChange = (mode: 'driving' | 'walking' | 'biking' | 'transit') => {
+    setTravelMode(mode);
+  };
+
   const handleNewSearch = () => {
     setViewMode('search');
     resetToInitialState();
@@ -362,6 +367,7 @@ export default function Home() {
             onStationSelect={handleStationSelect}
             userAddress={userAddress}
             onRoutePlanned={setRouteDetails}
+            travelMode={travelMode}
           />
         </div>
 
@@ -474,6 +480,8 @@ export default function Home() {
                         selectedStationIndex={selectedStationIndex}
                         onStationSelect={handleStationSelect}
                         routeDetails={routeDetails}
+                        travelMode={travelMode}
+                        onTravelModeChange={handleTravelModeChange}
                     />
                     <Button variant="outline" className="w-full" onClick={handleNewSearch}>
                         <ArrowLeft className="mr-2 h-4 w-4" />

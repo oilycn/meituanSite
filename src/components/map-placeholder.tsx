@@ -79,7 +79,7 @@ export function MapComponent({
     if (isApiLoaded && mapContainer.current && !map.current) {
         const AMap = window.AMap;
         map.current = new AMap.Map(mapContainer.current, {
-            zoom: 11,
+            zoom: 12,
             center: [114.3055, 30.5928], // Wuhan center
             viewMode: '2D',
             mapStyle: 'amap://styles/whitesmoke',
@@ -103,16 +103,15 @@ export function MapComponent({
 
   useEffect(() => {
     if (isMapLoaded) {
-      const AMap = window.AMap;
       map.current.remove(markers.current);
       markers.current = [];
       if (userMarker.current) {
         map.current.remove(userMarker.current);
         userMarker.current = null;
       }
-
-      const allMapElements: any[] = [];
-
+  
+      const elementsToFit: any[] = [];
+  
       if (userCoordinates) {
         const userIcon = new AMap.Icon({
           size: new AMap.Size(40, 40),
@@ -130,9 +129,9 @@ export function MapComponent({
           anchor: 'bottom-center',
           title: userAddress || '您的位置',
         });
-        allMapElements.push(userMarker.current);
+        elementsToFit.push(userMarker.current);
       }
-
+  
       stations.forEach((station, index) => {
         const isSelected = selectedStationIndex === index;
         const distanceInfo = index < 3 && station.distance > 0
@@ -161,23 +160,30 @@ export function MapComponent({
           anchor: 'bottom-center',
           title: station.name,
         });
-
+  
         marker.on('click', () => {
           onStationSelect(index === selectedStationIndex ? null : index);
         });
-
+  
         markers.current.push(marker);
-        allMapElements.push(marker);
       });
-
-      if (allMapElements.length > 0 && selectedStationIndex === null) {
+  
+      if (userCoordinates && stations.length > 0 && selectedStationIndex === null) {
+          // After a search, fit the view to the user and the closest station.
+          elementsToFit.push(markers.current[0]);
+      }
+      
+      if (elementsToFit.length > 0 && selectedStationIndex === null) {
         const padding = isMobile ? [80, 80, 350, 80] : [100, 100, 100, 420];
         map.current.setFitView(
-          allMapElements,
+          elementsToFit,
           false,
           padding,
-          16
+          15 // Use a more reasonable max zoom
         );
+      } else if (elementsToFit.length === 0 && selectedStationIndex === null) {
+        // If no search, just center on Wuhan
+        map.current.setZoomAndCenter(12, [114.3055, 30.5928]);
       }
     }
   }, [stations, userCoordinates, userAddress, isMapLoaded, selectedStationIndex, onStationSelect, isMobile]);
@@ -197,7 +203,7 @@ export function MapComponent({
             if (status === 'complete') {
                 if ((result.routes && result.routes.length > 0) || (result.plans && result.plans.length > 0)) {
                     const routePadding = isMobile ? [80, 80, 350, 80] : [80, 80, 80, 420];
-                    map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, routePadding, 16);
+                    map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, routePadding, 15);
 
                     let distance = 0;
                     let time = 0;
@@ -217,11 +223,9 @@ export function MapComponent({
                         time: `${timeInMinutes} 分钟`,
                     });
                 } else {
-                    console.error(`获取${travelMode}路线失败，结果为空`, result);
                     onRoutePlanned({ distance: '无法规划', time: '路线' });
                 }
             } else {
-                console.error(`获取${travelMode}数据显示失败`, result);
                 onRoutePlanned({ distance: '无法规划', time: '路线' });
             }
         };

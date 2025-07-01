@@ -17,7 +17,6 @@ import { getNearestStations } from "@/app/actions";
 import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
-import { wuhanStations } from "@/lib/stations";
 import { StationDetails } from "@/components/station-details";
 
 
@@ -78,18 +77,15 @@ export default function Home() {
   const addressValue = form.watch("address");
 
   const resetToInitialState = useCallback(() => {
-    const initialStations = wuhanStations.map(station => ({
-      ...station,
-      distance: 0,
-    }));
-    setStations(initialStations);
+    setStations([]);
     setUserAddress(null);
     setUserCoordinates(null);
     setSelectedStationIndex(null);
     setRouteDetails(null);
     setIsLoading(false);
     setViewMode('search');
-  }, []);
+    form.reset({ address: "" });
+  }, [form]);
 
   useEffect(() => {
     try {
@@ -116,7 +112,7 @@ export default function Home() {
           .then((AMap) => {
             setGeocoder(new AMap.Geocoder({ city: '全国' }));
             setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
-            resetToInitialState();
+            setIsLoading(false);
           })
           .catch((e) => {
             console.error("Failed to load AMap services:", e);

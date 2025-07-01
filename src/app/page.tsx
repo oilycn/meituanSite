@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getNearestStations } from "@/app/actions";
+import { getNearestStations, getSuggestions } from "@/app/actions";
 import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
@@ -45,11 +45,6 @@ declare global {
   }
 }
 
-interface AddressSuggestion {
-  name: string;
-  district: string;
-}
-
 export default function Home() {
   const { toast } = useToast();
   const [stations, setStations] = useState<FindNearestStationsOutput['stations']>([]);
@@ -60,12 +55,11 @@ export default function Home() {
   const [selectedStationIndex, setSelectedStationIndex] = useState<number | null>(null);
   const [userCoordinates, setUserCoordinates] = useState<{latitude: number, longitude: number} | null>(null);
 
-  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [popoverMode, setPopoverMode] = useState<'suggestions' | 'history'>('suggestions');
   const [addressHistory, setAddressHistory] = useState<string[]>([]);
   
-  const [autoComplete, setAutoComplete] = useState<any>(null);
   const [geocoder, setGeocoder] = useState<any>(null);
 
   const [viewMode, setViewMode] = useState<'search' | 'results'>('search');
@@ -116,10 +110,9 @@ export default function Home() {
         AMapLoader.load({
           key: process.env.NEXT_PUBLIC_AMAP_KEY || "",
           version: "2.0",
-          plugins: ['AMap.AutoComplete', 'AMap.Geocoder'],
+          plugins: ['AMap.Geocoder'],
         })
           .then((AMap) => {
-            setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
             setGeocoder(new AMap.Geocoder({ city: '全国' }));
             resetToInitialState();
           })
@@ -145,33 +138,22 @@ export default function Home() {
       return;
     }
 
-    const handler = setTimeout(() => {
-      if (!autoComplete) return;
-      autoComplete.search(addressValue, (status: string, result: any) => {
-        if (status === 'complete' && result.tips) {
-            const validSuggestions = result.tips.filter((tip: any) => tip.name && tip.district);
-            if (validSuggestions.length > 0) {
-                setSuggestions(validSuggestions.map((tip: any) => ({
-                    name: tip.name,
-                    district: tip.district,
-                })));
-                setPopoverMode('suggestions');
-                setIsPopoverOpen(true);
-            } else {
-                setSuggestions([]);
-                setIsPopoverOpen(false);
-            }
-        } else {
-          setSuggestions([]);
-          setIsPopoverOpen(false);
-        }
-      });
+    const handler = setTimeout(async () => {
+      const result = await getSuggestions({ partialAddress: addressValue });
+      if (result.data && result.data.suggestions.length > 0) {
+        setSuggestions(result.data.suggestions);
+        setPopoverMode('suggestions');
+        setIsPopoverOpen(true);
+      } else {
+        setSuggestions([]);
+        setIsPopoverOpen(false);
+      }
     }, 500);
 
     return () => {
       clearTimeout(handler);
     };
-  }, [addressValue, autoComplete]);
+  }, [addressValue]);
 
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -235,11 +217,13 @@ export default function Home() {
   const handleSuggestionClick = (suggestion: string) => {
     form.setValue("address", suggestion, { shouldValidate: true });
     setIsPopoverOpen(false);
+    onSubmit({ address: suggestion });
   };
   
   const handleHistoryClick = (address: string) => {
     form.setValue("address", address, { shouldValidate: true });
     setIsPopoverOpen(false);
+    onSubmit({ address: address });
   };
   
   const handleLocateMe = async () => {
@@ -323,6 +307,9 @@ export default function Home() {
   const handleInputFocus = () => {
     if (!addressValue && addressHistory.length > 0) {
       setPopoverMode('history');
+      setIsPopoverOpen(true);
+    } else if (addressValue && suggestions.length > 0) {
+      setPopoverMode('suggestions');
       setIsPopoverOpen(true);
     }
   };
@@ -421,12 +408,11 @@ export default function Home() {
                                         {suggestions.map((suggestion, index) => (
                                         <li
                                             key={index}
-                                            className="px-3 py-2 cursor-pointer hover:bg-accent rounded-md"
-                                            onClick={() => handleSuggestionClick(suggestion.district + suggestion.name)}
+                                            className="px-3 py-2 cursor-pointer hover:bg-accent rounded-md text-sm"
+                                            onClick={() => handleSuggestionClick(suggestion)}
                                             onMouseDown={(e) => e.preventDefault()}
                                         >
-                                            <div className="text-sm font-medium">{suggestion.name}</div>
-                                            <div className="text-xs text-muted-foreground">{suggestion.district}</div>
+                                            {suggestion}
                                         </li>
                                         ))}
                                     </ul>

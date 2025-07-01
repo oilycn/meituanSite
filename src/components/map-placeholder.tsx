@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Skeleton } from './ui/skeleton';
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
 import { MapPin, AlertTriangle } from 'lucide-react';
+import { useIsMobile } from "@/hooks/use-mobile";
+
 
 interface MapComponentProps {
   stations: FindNearestStationsOutput['stations'];
@@ -46,6 +48,8 @@ export function MapComponent({
   const [walking, setWalking] = useState<any>(null);
   const [riding, setRiding] = useState<any>(null);
   const [transfer, setTransfer] = useState<any>(null);
+  
+  const isMobile = useIsMobile();
 
 
   useEffect(() => {
@@ -167,15 +171,16 @@ export function MapComponent({
       });
 
       if (allMapElements.length > 0 && selectedStationIndex === null) {
+        const padding = isMobile ? [80, 80, 350, 80] : [100, 100, 100, 420];
         map.current.setFitView(
           allMapElements,
           false,
-          [100, 100, 100, 420],
+          padding,
           16
         );
       }
     }
-  }, [stations, userCoordinates, userAddress, isMapLoaded, selectedStationIndex, onStationSelect]);
+  }, [stations, userCoordinates, userAddress, isMapLoaded, selectedStationIndex, onStationSelect, isMobile]);
 
   useEffect(() => {
     driving?.clear();
@@ -191,7 +196,8 @@ export function MapComponent({
         const onSearchResult = (status: string, result: any) => {
             if (status === 'complete') {
                 if ((result.routes && result.routes.length > 0) || (result.plans && result.plans.length > 0)) {
-                    map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, [80, 80, 80, 420], 16);
+                    const routePadding = isMobile ? [80, 80, 350, 80] : [80, 80, 80, 420];
+                    map.current.setFitView([userMarker.current, markers.current[selectedStationIndex]], false, routePadding, 16);
 
                     let distance = 0;
                     let time = 0;
@@ -235,7 +241,7 @@ export function MapComponent({
                 break;
         }
     }
-  }, [selectedStationIndex, userCoordinates, travelMode, stations, onRoutePlanned, isMapLoaded, driving, walking, riding, transfer]);
+  }, [selectedStationIndex, userCoordinates, travelMode, stations, onRoutePlanned, isMapLoaded, driving, walking, riding, transfer, isMobile]);
 
   if (!process.env.NEXT_PUBLIC_AMAP_KEY || !process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE) {
       return (

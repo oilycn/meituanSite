@@ -66,7 +66,7 @@ export function StationDetails({ stations, selectedStationIndex, onStationSelect
       <Collapsible
         open={isMobile ? isListOpen : true}
         onOpenChange={isMobile ? setIsListOpen : () => {}}
-        className="w-full"
+        className="w-full flex flex-col"
       >
         <CollapsibleTrigger asChild disabled={!isMobile}>
           <div className={cn("w-full shrink-0", isMobile ? "cursor-pointer" : "cursor-default")}>
@@ -99,8 +99,8 @@ export function StationDetails({ stations, selectedStationIndex, onStationSelect
           </div>
         </CollapsibleTrigger>
         
-        <CollapsibleContent>
-            <div className="flex flex-col max-h-[60vh] md:max-h-[calc(100vh-320px)]">
+        <CollapsibleContent asChild>
+            <div className="flex flex-col flex-1 min-h-0 max-h-[60vh] md:max-h-[calc(100vh-320px)]">
               <div className="px-6 py-4 border-b shrink-0">
                 <Tabs value={travelMode} onValueChange={(value) => onTravelModeChange(value as any)} className="w-full">
                     <TabsList className="grid w-full grid-cols-4 h-auto">
@@ -111,69 +111,70 @@ export function StationDetails({ stations, selectedStationIndex, onStationSelect
                     </TabsList>
                 </Tabs>
               </div>
-
-              <ScrollArea className="flex-1 min-h-0">
-                <CardContent className="p-4">
-                  <div className="space-y-1">
-                    {stations.map((station, index) => (
-                      <div
-                        key={index}
-                        className={cn(
-                          "p-3 rounded-lg cursor-pointer border-2 transition-all",
-                          selectedStationIndex === index ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted"
-                        )}
-                        onClick={() => onStationSelect(index === selectedStationIndex ? null : index)}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div className="font-bold text-md pr-2">
-                            {index + 1}. {station.name}
+              <div className="relative flex-1">
+                <ScrollArea className="absolute h-full w-full">
+                  <CardContent className="p-4">
+                    <div className="space-y-1">
+                      {stations.map((station, index) => (
+                        <div
+                          key={index}
+                          className={cn(
+                            "p-3 rounded-lg cursor-pointer border-2 transition-all",
+                            selectedStationIndex === index ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted"
+                          )}
+                          onClick={() => onStationSelect(index === selectedStationIndex ? null : index)}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="font-bold text-md pr-2">
+                              {index + 1}. {station.name}
+                            </div>
+                            {station.distance > 0 && (
+                              <div className="text-sm font-semibold text-primary whitespace-nowrap">
+                                  {station.distance.toFixed(2)} km
+                              </div>
+                            )}
                           </div>
-                          {station.distance > 0 && (
-                            <div className="text-sm font-semibold text-primary whitespace-nowrap">
-                                {station.distance.toFixed(2)} km
+                          <div className="text-sm text-muted-foreground mt-1 flex items-start gap-2">
+                            <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" /> 
+                            <span>{station.address}</span>
+                          </div>
+                          {station.phoneNumber !== '未知' && (
+                            <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                              <Phone className="w-4 h-4 flex-shrink-0" />
+                              <span>{station.phoneNumber}</span>
                             </div>
                           )}
+                          
+                          {selectedStationIndex === index && (
+                              <div className="mt-3 space-y-3">
+                                  {routeDetails ? (
+                                      <div className="p-3 bg-accent/20 rounded-md border border-accent/50">
+                                          <div className="flex items-center justify-between gap-4 text-sm font-medium">
+                                              <div className="flex items-center gap-2 text-accent-foreground font-bold">
+                                                  <CurrentIcon className="w-5 h-5" />
+                                                  <span>{travelModeConfig[travelMode].label}方案</span>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <Clock className="w-4 h-4" />
+                                                <span>{routeDetails.time}</span>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <MapPin className="w-4 h-4" />
+                                                <span>{routeDetails.distance}</span>
+                                              </div>
+                                          </div>
+                                      </div>
+                                   ) : (
+                                      <div className="p-3 text-sm text-center text-muted-foreground animate-pulse">正在计算路线...</div>
+                                  )}
+                              </div>
+                          )}
                         </div>
-                        <div className="text-sm text-muted-foreground mt-1 flex items-start gap-2">
-                          <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" /> 
-                          <span>{station.address}</span>
-                        </div>
-                        {station.phoneNumber !== '未知' && (
-                          <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-                            <Phone className="w-4 h-4 flex-shrink-0" />
-                            <span>{station.phoneNumber}</span>
-                          </div>
-                        )}
-                        
-                        {selectedStationIndex === index && (
-                            <div className="mt-3 space-y-3">
-                                {routeDetails ? (
-                                    <div className="p-3 bg-accent/20 rounded-md border border-accent/50">
-                                        <div className="flex items-center justify-between gap-4 text-sm font-medium">
-                                            <div className="flex items-center gap-2 text-accent-foreground font-bold">
-                                                <CurrentIcon className="w-5 h-5" />
-                                                <span>{travelModeConfig[travelMode].label}方案</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                              <Clock className="w-4 h-4" />
-                                              <span>{routeDetails.time}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                              <MapPin className="w-4 h-4" />
-                                              <span>{routeDetails.distance}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                 ) : (
-                                    <div className="p-3 text-sm text-center text-muted-foreground animate-pulse">正在计算路线...</div>
-                                )}
-                            </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </ScrollArea>
+                      ))}
+                    </div>
+                  </CardContent>
+                </ScrollArea>
+              </div>
             </div>
         </CollapsibleContent>
       </Collapsible>

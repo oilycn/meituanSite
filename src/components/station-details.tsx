@@ -112,7 +112,7 @@ export function StationDetails({ stations, selectedStationIndex, onStationSelect
                 </Tabs>
               </div>
 
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1 min-h-0">
                 <CardContent className="p-4">
                   <div className="space-y-1">
                     {stations.map((station, index) => (
@@ -164,7 +164,7 @@ export function StationDetails({ stations, selectedStationIndex, onStationSelect
                                             </div>
                                         </div>
                                     </div>
-                                ) : (
+                                 ) : (
                                     <div className="p-3 text-sm text-center text-muted-foreground animate-pulse">正在计算路线...</div>
                                 )}
                             </div>

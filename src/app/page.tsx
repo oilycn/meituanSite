@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getNearestStations, getSuggestions } from "@/app/actions";
+import { getNearestStations } from "@/app/actions";
 import { MeituanIcon } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/components/ui/popover";
 import type { FindNearestStationsOutput } from "@/ai/flows/find-nearest-stations";
@@ -61,6 +61,7 @@ export default function Home() {
   const [addressHistory, setAddressHistory] = useState<string[]>([]);
   
   const [geocoder, setGeocoder] = useState<any>(null);
+  const [autoComplete, setAutoComplete] = useState<any>(null);
 
   const [viewMode, setViewMode] = useState<'search' | 'results'>('search');
   const [routeDetails, setRouteDetails] = useState<{ distance: string; time: string; } | null>(null);
@@ -110,10 +111,11 @@ export default function Home() {
         AMapLoader.load({
           key: process.env.NEXT_PUBLIC_AMAP_KEY || "",
           version: "2.0",
-          plugins: ['AMap.Geocoder'],
+          plugins: ['AMap.Geocoder', 'AMap.AutoComplete'],
         })
           .then((AMap) => {
             setGeocoder(new AMap.Geocoder({ city: '全国' }));
+            setAutoComplete(new AMap.AutoComplete({ city: '全国' }));
             resetToInitialState();
           })
           .catch((e) => {
@@ -130,7 +132,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!addressValue || addressValue.length < 2) {
+    if (!addressValue || addressValue.length < 2 || !autoComplete) {
       setSuggestions([]);
        if (document.activeElement?.getAttribute('name') !== 'address') {
           setIsPopoverOpen(false);
@@ -138,22 +140,23 @@ export default function Home() {
       return;
     }
 
-    const handler = setTimeout(async () => {
-      const result = await getSuggestions({ partialAddress: addressValue });
-      if (result.data && result.data.suggestions.length > 0) {
-        setSuggestions(result.data.suggestions);
-        setPopoverMode('suggestions');
-        setIsPopoverOpen(true);
-      } else {
-        setSuggestions([]);
-        setIsPopoverOpen(false);
-      }
-    }, 500);
+    const handler = setTimeout(() => {
+      autoComplete.search(addressValue, (status: string, result: any) => {
+        if (status === 'complete' && result.tips && result.tips.length > 0) {
+            setSuggestions(result.tips.map((tip: any) => tip.name));
+            setPopoverMode('suggestions');
+            setIsPopoverOpen(true);
+        } else {
+            setSuggestions([]);
+            setIsPopoverOpen(false);
+        }
+      });
+    }, 300);
 
     return () => {
       clearTimeout(handler);
     };
-  }, [addressValue]);
+  }, [addressValue, autoComplete]);
 
 
   async function onSubmit(values: z.infer<typeof formSchema>) {

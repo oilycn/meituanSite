@@ -4,7 +4,7 @@
 
 ## ✨ 主要功能 (Key Features)
 
-- **AI 地址建议**: 输入地址时，由 AI 智能推荐相关地址。
+- **地址自动补全**: 在输入地址时，由高德地图提供智能建议。
 - **精准定位与搜索**:
     - 点击“我的位置”按钮，通过**浏览器 `Geolocation API`** 获取当前坐标，并在地图上显示。
     - 在搜索框中输入地址后，通过**高德地图地理编码 API** 将文本地址转换为精确坐标进行搜索。
@@ -42,5 +42,5 @@
 - **语言 (Language)**: TypeScript
 - **UI 组件库 (UI Components)**: ShadCN UI
 - **样式 (Styling)**: Tailwind CSS
-- **地图服务 (Map Service)**: 高德地图 (AMap) - 用于地图展示、地理编码/逆地理编码、路线规划。
-- **AI 功能 (AI Functionality)**: Genkit - 用于地址建议。
+- **地图服务 (Map Service)**: 高德地图 (AMap) - 用于地图展示、地理编码/逆地理编码、路线规划和地址自动补全。
+- **后端流程 (Backend Flow)**: Genkit - 用于封装和管理后端逻辑。

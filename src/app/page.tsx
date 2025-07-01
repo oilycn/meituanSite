@@ -55,7 +55,7 @@ export default function Home() {
   const [selectedStationIndex, setSelectedStationIndex] = useState<number | null>(null);
   const [userCoordinates, setUserCoordinates] = useState<{latitude: number, longitude: number} | null>(null);
 
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [popoverMode, setPopoverMode] = useState<'suggestions' | 'history'>('suggestions');
   const [addressHistory, setAddressHistory] = useState<string[]>([]);
@@ -143,7 +143,7 @@ export default function Home() {
     const handler = setTimeout(() => {
       autoComplete.search(addressValue, (status: string, result: any) => {
         if (status === 'complete' && result.tips && result.tips.length > 0) {
-            setSuggestions(result.tips.map((tip: any) => tip.name));
+            setSuggestions(result.tips.filter((tip: any) => tip.id && tip.name));
             setPopoverMode('suggestions');
             setIsPopoverOpen(true);
         } else {
@@ -410,12 +410,18 @@ export default function Home() {
                                     <ul className="py-1">
                                         {suggestions.map((suggestion, index) => (
                                         <li
-                                            key={index}
-                                            className="px-3 py-2 cursor-pointer hover:bg-accent rounded-md text-sm"
-                                            onClick={() => handleSuggestionClick(suggestion)}
+                                            key={suggestion.id || index}
+                                            className="px-3 py-2 cursor-pointer hover:bg-accent rounded-md"
+                                            onClick={() => {
+                                                const fullAddress = suggestion.district ? `${suggestion.name}, ${suggestion.district}` : suggestion.name;
+                                                handleSuggestionClick(fullAddress);
+                                            }}
                                             onMouseDown={(e) => e.preventDefault()}
                                         >
-                                            {suggestion}
+                                            <div className="text-sm font-semibold">{suggestion.name}</div>
+                                            {suggestion.district && (
+                                                <div className="text-xs text-muted-foreground">{suggestion.district}</div>
+                                            )}
                                         </li>
                                         ))}
                                     </ul>
